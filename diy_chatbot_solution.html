@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elate Moving - Chat Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-container {
+            width: 400px;
+            height: 600px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .agent-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            object-fit: cover;
+        }
+
+        .header-content {
+            flex: 1;
+            text-align: left;
+        }
+
+        .chat-header h1 {
+            font-size: 1.4em;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .user-message {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .bot-message {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .typing-indicator {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 16px;
+            border-radius: 18px;
+            max-width: 80%;
+            margin-bottom: 15px;
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .chat-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .chat-input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .send-button {
+            position: absolute;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .send-button:hover {
+            background: #0056b3;
+        }
+
+        .lead-form {
+            display: none;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .form-field {
+            margin-bottom: 15px;
+        }
+
+        .form-field label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-field input, .form-field select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .form-submit {
+            background: #28a745;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .form-submit:hover {
+            background: #218838;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <img src="https://yourwebsite.com/images/dave-profile.jpg" alt="Dave from Elate Moving" class="agent-avatar">
+            <div class="header-content">
+                <h1>Dave - Elate Moving</h1>
+                <p>Your Moving Specialist</p>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                <strong>Dave:</strong> Hi! I'm Dave from Elate Moving. Ready to make your move stress-free? What's prompting your move?
+            </div>
+        </div>
+
+        <div class="lead-form" id="leadForm">
+            <h3>Let me get your details for an accurate quote:</h3>
+            <form id="quoteForm">
+                <div class="form-field">
+                    <label>First Name:</label>
+                    <input type="text" id="firstName" required>
+                </div>
+                <div class="form-field">
+                    <label>Last Name:</label>
+                    <input type="text" id="lastName" required>
+                </div>
+                <div class="form-field">
+                    <label>Phone Number:</label>
+                    <input type="tel" id="phoneNumber" required>
+                </div>
+                <div class="form-field">
+                    <label>Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-field">
+                    <label>Moving From Address:</label>
+                    <input type="text" id="originAddress" required>
+                </div>
+                <div class="form-field">
+                    <label>Moving To Address:</label>
+                    <input type="text" id="destinationAddress" required>
+                </div>
+                <div class="form-field">
+                    <label>Move Date:</label>
+                    <input type="date" id="moveDate" required>
+                </div>
+                <div class="form-field">
+                    <label>Service Type:</label>
+                    <select id="serviceType" required>
+                        <option value="">Select Service</option>
+                        <option value="full-service">Full-Service (Pack, Move, Unpack)</option>
+                        <option value="pack-and-move">Pack and Move Only</option>
+                        <option value="labor-and-truck">Labor and Truck</option>
+                        <option value="labor-only">Labor Only</option>
+                        <option value="specialty">Specialty Items</option>
+                    </select>
+                </div>
+                <button type="submit" class="form-submit">Get My Quote</button>
+            </form>
+        </div>
+        
+        <div class="chat-input-container" style="position: relative;">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Type your message..." />
+            <button class="send-button" id="sendButton">→</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY'; // Replace with your key
+        const ASSISTANT_ID = 'asst_dBn8pHk96P1Q19pRHuI5zimF'; // Your Dave assistant
+        const WEBHOOK_URL = 'https://hook.us1.make.com/vpvz1469ek7six55q2afv4i2e5h8xg4i';
+        
+        let threadId = null;
+        let isProcessing = false;
+
+        // DOM elements
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const leadForm = document.getElementById('leadForm');
+        const quoteForm = document.getElementById('quoteForm');
+
+        // Initialize conversation
+        async function initializeChat() {
+            try {
+                const response = await fetch('https://api.openai.com/v1/threads', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                        'OpenAI-Beta': 'assistants=v2'
+                    }
+                });
+                const thread = await response.json();
+                threadId = thread.id;
+            } catch (error) {
+                console.error('Failed to initialize chat:', error);
+            }
+        }
+
+        // Send message to assistant with streaming
+        async function sendMessage(message) {
+            if (isProcessing || !threadId) return;
+            
+            isProcessing = true;
+            addMessage(message, 'user');
+            showTypingIndicator();
+
+            try {
+                // Add message to thread
+                await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                        'OpenAI-Beta': 'assistants=v2'
+                    },
+                    body: JSON.stringify({
+                        role: 'user',
+                        content: message
+                    })
+                });
+
+                // Run assistant with streaming
+                const runResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                        'OpenAI-Beta': 'assistants=v2'
+                    },
+                    body: JSON.stringify({
+                        assistant_id: ASSISTANT_ID,
+                        stream: true
+                    })
+                });
+
+                hideTypingIndicator();
+                await handleStreamingResponse(runResponse);
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                hideTypingIndicator();
+                addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+            }
+
+            isProcessing = false;
+        }
+
+        // Handle streaming response
+        async function handleStreamingResponse(response) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            let currentMessageDiv = null;
+            let buffer = '';
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = (buffer + chunk).split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            
+                            if (data === '[DONE]') {
+                                return;
+                            }
+
+                            try {
+                                const parsed = JSON.parse(data);
+                                
+                                // Handle message deltas
+                                if (parsed.object === 'thread.message.delta') {
+                                    const delta = parsed.delta;
+                                    
+                                    if (delta.content && delta.content[0] && delta.content[0].text) {
+                                        const textDelta = delta.content[0].text.value;
+                                        
+                                        if (!currentMessageDiv) {
+                                            currentMessageDiv = createStreamingMessage();
+                                        }
+                                        
+                                        // Add text with typing effect
+                                        await typeText(currentMessageDiv, textDelta);
+                                    }
+                                }
+                                
+                                // Handle run completion
+                                if (parsed.object === 'thread.run' && parsed.status === 'completed') {
+                                    if (currentMessageDiv) {
+                                        const fullText = currentMessageDiv.textContent.replace('Dave: ', '');
+                                        checkForFormTrigger(fullText);
+                                    }
+                                    return;
+                                }
+                                
+                            } catch (e) {
+                                // Skip malformed JSON
+                                continue;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Streaming error:', error);
+                if (!currentMessageDiv) {
+                    addMessage('Sorry, something went wrong. Please try again.', 'bot');
+                }
+            }
+        }
+
+        // Create streaming message element
+        function createStreamingMessage() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot-message';
+            messageDiv.innerHTML = '<strong>Dave:</strong> ';
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return messageDiv;
+        }
+
+        // Type text with realistic speed
+        async function typeText(element, text) {
+            const textSpan = document.createElement('span');
+            element.appendChild(textSpan);
+            
+            for (let i = 0; i < text.length; i++) {
+                textSpan.textContent += text[i];
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // Variable typing speed for realism
+                const char = text[i];
+                let delay = 30; // Base delay
+                
+                if (char === '.' || char === '!' || char === '?') {
+                    delay = 150; // Pause at sentence end
+                } else if (char === ',' || char === ';') {
+                    delay = 100; // Pause at commas
+                } else if (char === ' ') {
+                    delay = 50; // Slight pause at spaces
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        // Check if Dave wants to show the form
+        function checkForFormTrigger(message) {
+            const triggerPhrases = [
+                "let me get the specific details",
+                "run through our quote process", 
+                "need to get some specifics",
+                "ask you a few specific questions"
+            ];
+            
+            const shouldShowForm = triggerPhrases.some(phrase => 
+                message.toLowerCase().includes(phrase)
+            );
+            
+            if (shouldShowForm) {
+                setTimeout(() => {
+                    showLeadForm();
+                }, 1000);
+            }
+        }
+
+        // Show the lead collection form
+        function showLeadForm() {
+            chatMessages.style.display = 'none';
+            document.querySelector('.chat-input-container').style.display = 'none';
+            leadForm.style.display = 'block';
+        }
+
+        // Handle form submission
+        async function submitLead(formData) {
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ...formData,
+                        referralSource: 'chatbot_website',
+                        userOptIn: true,
+                        submissionTimestamp: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    leadForm.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <h2 style="color: #28a745; margin-bottom: 20px;">✅ Quote Request Submitted!</h2>
+                            <p>Thanks! Our team will contact you within 24 hours with your personalized moving quote.</p>
+                            <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                                Questions? Call us at (555) 123-MOVE
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    throw new Error('Webhook failed');
+                }
+            } catch (error) {
+                alert('There was an issue submitting your information. Please try again or call us directly.');
+                console.error('Webhook error:', error);
+            }
+        }
+
+        // UI Helper functions
+        function addMessage(message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'typing-indicator';
+            typingDiv.id = 'typingIndicator';
+            typingDiv.innerHTML = `
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                Dave is typing...
+            `;
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) typing.remove();
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', () => {
+            const message = chatInput.value.trim();
+            if (message) {
+                sendMessage(message);
+                chatInput.value = '';
+            }
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendButton.click();
+            }
+        });
+
+        quoteForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                email: document.getElementById('email').value,
+                originAddress: document.getElementById('originAddress').value,
+                destinationAddress: document.getElementById('destinationAddress').value,
+                moveDate: document.getElementById('moveDate').value,
+                serviceType: document.getElementById('serviceType').value
+            };
+            
+            submitLead(formData);
+        });
+
+        // Initialize when page loads
+        window.addEventListener('load', initializeChat);
+    </script>
+</body>
+</html>

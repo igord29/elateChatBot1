@@ -1,0 +1,67 @@
+# Environment variables
+.env
+.env.local
+.env.production
+env.example
+
+# Python/Django
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# Node.js/React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+build/
+dist/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+pgdata/
+redisdata/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Internal docs
+README-INTERNAL.md
+docs/internal/
+SETUP-GUIDE.md
+
+# Logs
+logs/
+*.log
+celerybeat-schedule
+celerybeat.pid
+dump.rdb
+
+# Coverage reports
+htmlcov/
+.coverage
+.pytest_cache/
