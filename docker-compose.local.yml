@@ -1,0 +1,286 @@
+version: '3.8'
+
+services:
+  # Nginx Reverse Proxy (Local Development)
+  nginx:
+    image: nginx:alpine
+    container_name: elate_chatbot_nginx_local
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./static:/var/www/static:ro
+      - ./media:/var/www/media:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - web
+      - websocket
+    networks:
+      - elate_network
+    restart: unless-stopped
+    profiles:
+      - local
+
+  # Django Web Application (Development)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: elate_chatbot_web_local
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=elate_chatbot.settings
+      - DATABASE_URL=postgresql://elate_user:${DB_PASSWORD:-localdev}@db:5432/elate_chatbot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-local-development-key}
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      - CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key-here}
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-your-email@gmail.com}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-your-email-app-password}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL:-False}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@localhost}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - elate_network
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000
+
+  # WebSocket Server (Django Channels) - Development
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: elate_chatbot_websocket_local
+    command: daphne -b 0.0.0.0 -p 8001 elate_chatbot.asgi:application
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    ports:
+      - "8001:8001"
+    environment:
+      - DJANGO_SETTINGS_MODULE=elate_chatbot.settings
+      - DATABASE_URL=postgresql://elate_user:${DB_PASSWORD:-localdev}@db:5432/elate_chatbot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-local-development-key}
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      - CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key-here}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - elate_network
+    restart: unless-stopped
+
+  # Celery Worker (Development)
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: elate_chatbot_celery_local
+    command: celery -A elate_chatbot worker --loglevel=info --concurrency=2
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    environment:
+      - DJANGO_SETTINGS_MODULE=elate_chatbot.settings
+      - DATABASE_URL=postgresql://elate_user:${DB_PASSWORD:-localdev}@db:5432/elate_chatbot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-local-development-key}
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      - CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key-here}
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-your-email@gmail.com}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-your-email-app-password}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL:-False}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@localhost}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - elate_network
+    restart: unless-stopped
+
+  # Celery Beat (Scheduler) - Development
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: elate_chatbot_celery_beat_local
+    command: celery -A elate_chatbot beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    environment:
+      - DJANGO_SETTINGS_MODULE=elate_chatbot.settings
+      - DATABASE_URL=postgresql://elate_user:${DB_PASSWORD:-localdev}@db:5432/elate_chatbot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-local-development-key}
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      - CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key-here}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - elate_network
+    restart: unless-stopped
+
+  # Celery Flower (Monitoring) - Development
+  celery-flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: elate_chatbot_celery_flower_local
+    command: celery -A elate_chatbot flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - DJANGO_SETTINGS_MODULE=elate_chatbot.settings
+      - DATABASE_URL=postgresql://elate_user:${DB_PASSWORD:-localdev}@db:5432/elate_chatbot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-local-development-key}
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      - CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key-here}
+    depends_on:
+      - db
+      - redis
+      - celery
+    networks:
+      - elate_network
+    restart: unless-stopped
+
+  # PostgreSQL Database (Development)
+  db:
+    image: postgres:15-alpine
+    container_name: elate_chatbot_db_local
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=elate_chatbot
+      - POSTGRES_USER=elate_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-localdev}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    networks:
+      - elate_network
+    restart: unless-stopped
+
+  # Redis Cache and Message Broker (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: elate_chatbot_redis_local
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.local.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - elate_network
+    restart: unless-stopped
+
+  # pgAdmin (Database Management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: elate_chatbot_pgadmin_local
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@localhost
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    networks:
+      - elate_network
+    restart: unless-stopped
+    profiles:
+      - local
+
+  # Redis Commander (Redis Management)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: elate_chatbot_redis_commander_local
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - elate_network
+    restart: unless-stopped
+    profiles:
+      - local
+
+  # MailHog (Email Testing)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: elate_chatbot_mailhog_local
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - elate_network
+    restart: unless-stopped
+    profiles:
+      - local
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
+  nginx_logs:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  elate_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
