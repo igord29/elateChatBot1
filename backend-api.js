@@ -1,16 +1,17 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const { Pool } = require('pg');
-const Redis = require('ioredis');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
-const OpenAI = require('openai');
-const axios = require('axios');
-const AssistantRunHandler = require('./assistants-run');
+import dotenv from 'dotenv';
+dotenv.config();
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { Pool } from 'pg';
+import Redis from 'ioredis';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+import OpenAI from 'openai';
+import axios from 'axios';
+import AssistantRunHandler from './assistants-run.js';
 
 class MovingChatbotAPI {
     constructor() {
@@ -1100,7 +1101,7 @@ class MovingChatbotAPI {
 
     async sendLeadNotifications(lead) {
         try {
-            const { postLeadToCRM, notifyLead } = require('./crm-webhook-handler');
+            const { postLeadToCRM, notifyLead } = await import('./crm-webhook-handler.js');
             
             // Submit to CRM webhook
             const crmResult = await postLeadToCRM(lead);
@@ -1280,9 +1281,9 @@ class MovingChatbotAPI {
 }
 
 // Start server if run directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
     const api = new MovingChatbotAPI();
     api.start();
 }
 
-module.exports = MovingChatbotAPI; 
+export default MovingChatbotAPI; 

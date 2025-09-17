@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import ChatbotWidget from './components/ChatbotWidget';
+import ChatbotWidget from './components/ChatbotWidget.jsx';
 import './styles/chatbot.css';
 
 class ElateChatbotClass {
