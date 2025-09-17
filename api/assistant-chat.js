@@ -5,6 +5,7 @@
 
 const OpenAI = require('openai');
 const crypto = require('crypto');
+const fetch = require('node-fetch');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
