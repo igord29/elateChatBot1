@@ -3,13 +3,6 @@
  * Handles assistant runs, tool calls, and webhook submissions
  */
 
-// Vercel runtime configuration
-export const config = {
-  runtime: 'nodejs18.x',
-  memory: 1024,
-  maxDuration: 60
-};
-
 import OpenAI from 'openai';
 import crypto from 'crypto';
 
