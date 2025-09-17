@@ -2,6 +2,7 @@
   "name": "elate-moving-chatbot",
   "version": "1.0.0",
   "description": "AI-powered moving company chatbot with real-time support and lead generation",
+  "type": "module",
   "main": "backend-api.js",
   "scripts": {
     "start": "node backend-api.js",
