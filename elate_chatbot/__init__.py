@@ -1,1 +1,0 @@
-# Elate Chatbot Django Project
