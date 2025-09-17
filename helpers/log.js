@@ -65,7 +65,7 @@ function logLeadSubmission(event, lead_id, lead, extra = {}) {
     });
 }
 
-module.exports = {
+export {
     maskPhone,
     maskEmail,
     logLeadEvent,

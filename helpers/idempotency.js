@@ -3,7 +3,7 @@
  * Prevents duplicate leads by generating deterministic IDs
  */
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 /**
  * Generate a deterministic hash for a lead to prevent duplicates
@@ -33,7 +33,7 @@ function generateLeadId(lead) {
     return `lead_${hash}_${timestamp}`;
 }
 
-module.exports = {
+export {
     leadHash,
     generateLeadId
 };

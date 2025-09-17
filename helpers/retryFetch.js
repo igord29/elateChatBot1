@@ -50,6 +50,6 @@ async function retryFetch(url, init = {}, { retries = 3, baseMs = 300 } = {}) {
     return await fetch(url, init);
 }
 
-module.exports = {
+export {
     retryFetch
 };

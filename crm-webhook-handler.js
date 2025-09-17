@@ -3,11 +3,11 @@
  * Handles lead submissions and sends them to Make.com webhook
  */
 
-const fetch = require('node-fetch');
-const { leadHash } = require('./helpers/idempotency');
-const { sanitizeLead } = require('./helpers/normalize');
-const { retryFetch } = require('./helpers/retryFetch');
-const { logLeadSubmission } = require('./helpers/log');
+import fetch from 'node-fetch';
+import { leadHash } from './helpers/idempotency.js';
+import { sanitizeLead } from './helpers/normalize.js';
+import { retryFetch } from './helpers/retryFetch.js';
+import { logLeadSubmission } from './helpers/log.js';
 
 function parseBody(text) { 
     try { 
@@ -92,7 +92,7 @@ async function notifyLead(lead) {
     return { ok: resp.ok, status: resp.status, body };
 }
 
-module.exports = {
+export {
     postLeadToCRM,
     notifyLead
 };

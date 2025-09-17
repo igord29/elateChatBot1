@@ -3,9 +3,9 @@
  * Handles Assistant runs with proper tool call processing
  */
 
-const OpenAI = require('openai');
-const { postLeadToCRM, notifyLead } = require('./crm-webhook-handler');
-const { leadHash } = require('./helpers/idempotency');
+import OpenAI from 'openai';
+import { postLeadToCRM, notifyLead } from './crm-webhook-handler.js';
+import { leadHash } from './helpers/idempotency.js';
 
 class AssistantRunHandler {
     constructor() {
@@ -164,4 +164,4 @@ class AssistantRunHandler {
     }
 }
 
-module.exports = AssistantRunHandler;
+export default AssistantRunHandler;

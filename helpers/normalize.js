@@ -54,7 +54,7 @@ function sanitizeLead(lead) {
     };
 }
 
-module.exports = {
+export {
     normPhone,
     e164,
     clip,
