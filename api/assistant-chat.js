@@ -5,7 +5,6 @@
 
 import OpenAI from 'openai';
 import crypto from 'crypto';
-import fetch from 'node-fetch';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
