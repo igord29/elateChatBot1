@@ -167,8 +167,6 @@ async function handleSubmitLeadToolCall(call) {
 /**
  * Main API handler
  */
-const config = { runtime: "nodejs20.x" };
-
 module.exports = async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -280,5 +278,3 @@ module.exports = async function handler(req, res) {
     });
   }
 };
-
-module.exports.config = config;
