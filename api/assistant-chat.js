@@ -182,7 +182,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userText, threadId } = req.body;
+    // Parse JSON body if it's a string
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid JSON' });
+      }
+    }
+    
+    const { userText, threadId } = body;
 
     if (!userText) {
       return res.status(400).json({ error: 'userText is required' });
