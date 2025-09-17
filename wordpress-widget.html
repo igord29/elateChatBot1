@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elate Moving Chat Widget</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+        }
+
+        .chat-widget {
+            width: 100%;
+            max-width: 400px;
+            height: 600px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+        }
+
+        .chat-header h3 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 12px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 15px;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e1e5e9;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            margin: 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            overflow: hidden;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.bot .message-avatar {
+            background: #e1e5e9;
+            color: #666;
+        }
+
+        .message.bot .message-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .hot-buttons {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #e1e5e9;
+        }
+
+        .hot-buttons h4 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .hot-button {
+            display: block;
+            width: 100%;
+            padding: 10px 15px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border: 2px solid #e1e5e9;
+            border-radius: 20px;
+            color: #333;
+            text-decoration: none;
+            font-size: 13px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .hot-button:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            transform: translateY(-1px);
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #e1e5e9;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 2px solid #e1e5e9;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .send-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px 14px;
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 15px;
+            border-bottom-left-radius: 5px;
+            margin-bottom: 12px;
+            max-width: 80%;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: #999;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 8px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .streaming-text {
+            position: relative;
+        }
+
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #667eea;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .hot-buttons.hidden {
+            display: none;
+        }
+
+        /* WordPress iframe styles */
+        .wordpress-embed {
+            width: 100%;
+            height: 600px;
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-widget">
+        <div class="chat-header">
+            <h3>🚚 Elate Moving</h3>
+            <p>Get instant quotes and book your move</p>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-avatar">
+                    <img src="/src/frontend/assets/images/dave-avatar.jpg.jpg" alt="Dave" onerror="this.parentElement.textContent='🤖'">
+                </div>
+                <div class="message-content">
+                    Hello! I'm Dave, your Elate Moving assistant. How can I help you today?
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+        
+        <div class="hot-buttons" id="hotButtons">
+            <h4>Quick Start:</h4>
+            <button class="hot-button" data-message="I am interested in moving my home">🏠 I want to move my home</button>
+            <button class="hot-button" data-message="I am interested in moving my business">🏢 I want to move my business</button>
+            <button class="hot-button" data-message="I need a quote for moving services">💰 Get a moving quote</button>
+            <button class="hot-button" data-message="I have questions about your moving services">❓ Ask questions</button>
+        </div>
+        
+        <div class="chat-input-container">
+            <form class="chat-input-form" id="chatForm">
+                <input 
+                    type="text" 
+                    class="chat-input" 
+                    id="messageInput" 
+                    placeholder="Type your message..."
+                    autocomplete="off"
+                >
+                <button type="submit" class="send-button" id="sendButton">
+                    Send
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        class ChatWidget {
+            constructor() {
+                this.apiUrl = 'https://elate-chat-bot1.vercel.app/api/assistant-chat';
+                this.threadId = null;
+                this.chatMessages = document.getElementById('chatMessages');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.typingIndicator = document.getElementById('typingIndicator');
+                this.chatForm = document.getElementById('chatForm');
+                this.hotButtons = document.getElementById('hotButtons');
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                this.chatForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.sendMessage();
+                });
+                
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Hot button event listeners
+                document.querySelectorAll('.hot-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const message = button.getAttribute('data-message');
+                        this.messageInput.value = message;
+                        this.sendMessage();
+                    });
+                });
+            }
+            
+            async sendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+                
+                // Hide hot buttons after first message
+                this.hotButtons.classList.add('hidden');
+                
+                // Add user message to chat
+                this.addMessage(message, 'user');
+                this.messageInput.value = '';
+                this.setLoading(true);
+                
+                try {
+                    const response = await fetch(this.apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            userText: message,
+                            threadId: this.threadId
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        this.addMessage(`Error: ${data.error}`, 'bot', true);
+                    } else {
+                        // Stream the bot response
+                        this.streamMessage(data.text, 'bot');
+                        this.threadId = data.threadId;
+                        
+                        // Show success message if lead was submitted
+                        if (data.text.includes('specialist will reach out') || data.text.includes('locked your details')) {
+                            setTimeout(() => {
+                                this.showStatusMessage('✅ Lead submitted to CRM successfully!', 'success');
+                            }, 1000);
+                        }
+                    }
+                } catch (error) {
+                    this.addMessage(`Connection error: ${error.message}`, 'bot', true);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+            
+            addMessage(text, sender, isError = false, isStreaming = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                
+                if (sender === 'user') {
+                    avatar.textContent = '👤';
+                } else {
+                    // Use Dave's avatar for bot messages
+                    const avatarImg = document.createElement('img');
+                    avatarImg.src = '/src/frontend/assets/images/dave-avatar.jpg.jpg';
+                    avatarImg.alt = 'Dave';
+                    avatarImg.onerror = () => {
+                        // Fallback to emoji if image fails to load
+                        avatar.textContent = '🤖';
+                    };
+                    avatar.appendChild(avatarImg);
+                }
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                if (isError) content.classList.add('error-message');
+                if (isStreaming) content.classList.add('streaming-text');
+                
+                if (isStreaming) {
+                    content.innerHTML = text + '<span class="streaming-cursor"></span>';
+                } else {
+                    content.textContent = text;
+                }
+                
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(content);
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+                
+                return { messageDiv, content };
+            }
+            
+            showStatusMessage(text, type = 'info') {
+                const statusDiv = document.createElement('div');
+                statusDiv.className = `status-message ${type === 'error' ? 'error-message' : ''}`;
+                statusDiv.textContent = text;
+                
+                this.chatMessages.appendChild(statusDiv);
+                this.scrollToBottom();
+                
+                // Remove status message after 5 seconds
+                setTimeout(() => {
+                    if (statusDiv.parentNode) {
+                        statusDiv.parentNode.removeChild(statusDiv);
+                    }
+                }, 5000);
+            }
+            
+            setLoading(loading) {
+                this.sendButton.disabled = loading;
+                this.typingIndicator.style.display = loading ? 'block' : 'none';
+                if (loading) {
+                    this.scrollToBottom();
+                }
+            }
+            
+            streamMessage(text, sender) {
+                const { messageDiv, content } = this.addMessage('', sender, false, true);
+                let currentText = '';
+                let index = 0;
+                
+                const streamInterval = setInterval(() => {
+                    if (index < text.length) {
+                        currentText += text[index];
+                        content.innerHTML = currentText + '<span class="streaming-cursor"></span>';
+                        this.scrollToBottom();
+                        index++;
+                    } else {
+                        // Remove cursor when streaming is complete
+                        content.innerHTML = currentText;
+                        content.classList.remove('streaming-text');
+                        clearInterval(streamInterval);
+                    }
+                }, 30); // Adjust speed here (lower = faster)
+            }
+            
+            scrollToBottom() {
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+        }
+        
+        // Initialize the chatbot when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatWidget();
+        });
+    </script>
+</body>
+</html>
