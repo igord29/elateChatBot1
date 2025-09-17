@@ -3,8 +3,8 @@
  * Handles assistant runs, tool calls, and webhook submissions
  */
 
-import OpenAI from 'openai';
-import crypto from 'crypto';
+const OpenAI = require('openai');
+const crypto = require('crypto');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -167,7 +167,9 @@ async function handleSubmitLeadToolCall(call) {
 /**
  * Main API handler
  */
-export default async function handler(req, res) {
+const config = { runtime: "nodejs20.x" };
+
+module.exports = async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -277,4 +279,6 @@ export default async function handler(req, res) {
       message: error.message 
     });
   }
-}
+};
+
+module.exports.config = config;
