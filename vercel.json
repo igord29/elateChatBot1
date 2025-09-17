@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/assistant-chat.js": {
-      "runtime": "nodejs20.x",
+      "runtime": "@vercel/node@3.0.7",
       "memory": 1024,
       "maxDuration": 60
     }
