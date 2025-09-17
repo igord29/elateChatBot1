@@ -18,7 +18,8 @@ class ChatbotWebSocketServer {
         this.adminConnections = new Set();
         this.conversationHistory = new Map();
         this.flow = new MovingConversationFlow();
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const apiKey = process.env.OPENAI_API_KEY;
+        this.openai = apiKey ? new OpenAI({ apiKey }) : null;
         
         this.setupMiddleware();
         this.setupWebSocketHandlers();

@@ -2,16 +2,22 @@
   "name": "elate-moving-chatbot",
   "version": "1.0.0",
   "description": "AI-powered moving company chatbot with real-time support and lead generation",
+  "type": "module",
   "main": "backend-api.js",
   "scripts": {
     "start": "node backend-api.js",
     "dev": "nodemon backend-api.js",
-    "websocket": "node websocket-server.js",
+    "websocket": "node websocket-server-fixed.js",
     "test": "jest",
     "build": "webpack --mode production",
     "dev:frontend": "webpack serve --mode development",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:local": "concurrently \"npm run dev\" \"npm run websocket\" \"npm run dev:frontend\"",
+    "test:local:backend": "concurrently \"npm run dev\" \"npm run websocket\"",
+    "test:local:frontend": "npm run dev:frontend",
+    "setup:local": "node scripts/setup-local.js",
+    "clean": "rm -rf dist node_modules package-lock.json && npm install"
   },
   "keywords": [
     "chatbot",
@@ -32,9 +38,10 @@
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
-    "ioredis": "^5.3.2",
+    "ioredis": "^5.7.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",
+    "node-fetch": "^3.3.2",
     "openai": "^4.20.1",
     "pg": "^8.11.3",
     "uuid": "^9.0.1",
@@ -45,6 +52,7 @@
     "@babel/preset-env": "^7.23.5",
     "@babel/preset-react": "^7.23.3",
     "babel-loader": "^9.1.3",
+    "concurrently": "^8.2.2",
     "css-loader": "^6.8.1",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^9.1.0",
@@ -61,7 +69,7 @@
     "webpack-dev-server": "^4.15.1"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20"
   },
   "repository": {
     "type": "git",

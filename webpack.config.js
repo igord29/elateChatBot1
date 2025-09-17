@@ -7,8 +7,11 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     filename: 'chatbot-widget.js',
     clean: true,
-    library: 'ElateChatbot',
-    libraryTarget: 'umd',
+    library: {
+      name: 'ElateChatbot',
+      type: 'umd',
+      export: 'default'
+    },
     globalObject: 'this'
   },
   module: {
@@ -43,12 +46,25 @@ module.exports = {
     extensions: ['.js', '.jsx']
   },
   devServer: {
-    static: {
-      directory: path.join(__dirname, 'dist')
-    },
+    static: [
+      {
+        directory: path.join(__dirname, 'dist'),
+        publicPath: '/dist'
+      },
+      {
+        directory: path.join(__dirname, 'src/frontend'),
+        publicPath: '/'
+      }
+    ],
     compress: true,
     port: 8080,
-    hot: true
+    hot: true,
+    historyApiFallback: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+      'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization'
+    }
   },
   optimization: {
     minimize: true

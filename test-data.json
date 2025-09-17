@@ -1,0 +1,33 @@
+{
+  "conversations": [
+    {
+      "id": "test-conversation-1",
+      "userId": "test-user-1",
+      "messages": [
+        {
+          "id": "msg-1",
+          "type": "user",
+          "content": "Hi, I need help with moving services",
+          "timestamp": "2025-09-08T17:40:54.955Z"
+        },
+        {
+          "id": "msg-2",
+          "type": "bot",
+          "content": "Hello! I'm Dave from Elate Moving. I'd be happy to help you with your moving needs. What type of move are you planning?",
+          "timestamp": "2025-09-08T17:40:54.956Z"
+        }
+      ],
+      "status": "active",
+      "createdAt": "2025-09-08T17:40:54.956Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "test-user-1",
+      "email": "test@example.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "createdAt": "2025-09-08T17:40:54.956Z"
+    }
+  ]
+}

@@ -24,7 +24,8 @@ class ElateChatbotClass {
             },
             branding: {
                 companyName: 'Elate Moving',
-                logo: 'https://via.placeholder.com/40x40/2563eb/ffffff?text=EM',
+                logo: './assets/images/dave-avatar.jpg.jpg',
+                avatarUrl: './assets/images/dave-avatar.jpg.jpg',
                 welcomeMessage: 'Hi! I\'m Dave from Elate Moving. How can I help you today?'
             },
             features: {
@@ -68,8 +69,15 @@ class ElateChatbotClass {
 
 // Create a singleton instance and expose it globally
 const ElateChatbot = new ElateChatbotClass();
+
+// Expose the instance globally for UMD builds
 if (typeof window !== 'undefined') {
     window.ElateChatbot = ElateChatbot;
 }
 
-export default ElateChatbot; 
+// For UMD builds, we need to export the instance directly
+// This ensures the init method is available when the library is loaded
+export default ElateChatbot;
+
+// Also export the class for advanced usage
+export { ElateChatbotClass }; 

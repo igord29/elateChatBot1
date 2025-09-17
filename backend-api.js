@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const OpenAI = require('openai');
 const axios = require('axios');
+const AssistantRunHandler = require('./assistants-run');
 
 class MovingChatbotAPI {
     constructor() {
@@ -27,6 +28,7 @@ class MovingChatbotAPI {
         this.initializeDatabase();
         this.initializeRedis();
         this.initializeOpenAI();
+        this.assistantRunHandler = new AssistantRunHandler();
         
         // Setup middleware
         this.setupMiddleware();
@@ -297,21 +299,74 @@ class MovingChatbotAPI {
         try {
             const { id } = req.params;
             const { role = 'user', content, metadata } = req.body;
+            
+            // Store user message
+            let userMessage;
             if (this.dbDisabled) {
                 const convo = this.memoryStore.conversations.find(c => c.id === id);
                 if (!convo) return res.status(404).json({ error: 'Conversation not found' });
-                const msg = { id: uuidv4(), conversation_id: id, role, content, metadata: metadata || null, created_at: new Date() };
-                this.memoryStore.messages.push(msg);
+                userMessage = { id: uuidv4(), conversation_id: id, role, content, metadata: metadata || null, created_at: new Date() };
+                this.memoryStore.messages.push(userMessage);
                 convo.updated_at = new Date();
-                await this.trackEvent('widget_message_sent', { conversationId: id, role, messageLength: (content || '').length });
-                return res.status(201).json({ message: 'Message added successfully', data: msg });
+            } else {
+                const conversationResult = await this.pgPool.query('SELECT id FROM conversations WHERE id = $1', [id]);
+                if (conversationResult.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+                const result = await this.pgPool.query('INSERT INTO messages (conversation_id, role, content, metadata) VALUES ($1, $2, $3, $4) RETURNING *', [id, role, content, metadata]);
+                userMessage = result.rows[0];
+                await this.pgPool.query('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
             }
-            const conversationResult = await this.pgPool.query('SELECT id FROM conversations WHERE id = $1', [id]);
-            if (conversationResult.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
-            const result = await this.pgPool.query('INSERT INTO messages (conversation_id, role, content, metadata) VALUES ($1, $2, $3, $4) RETURNING *', [id, role, content, metadata]);
-            await this.pgPool.query('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+            
             await this.trackEvent('widget_message_sent', { conversationId: id, role, messageLength: (content || '').length });
-            res.status(201).json({ message: 'Message added successfully', data: result.rows[0] });
+            
+            // If it's a user message, run Assistant and get response
+            if (role === 'user' && content) {
+                try {
+                    const assistantResult = await this.assistantRunHandler.runAssistant({ 
+                        userText: content,
+                        threadId: metadata?.threadId 
+                    });
+                    
+                    // Store assistant response
+                    const assistantMessage = {
+                        id: uuidv4(),
+                        conversation_id: id,
+                        role: 'assistant',
+                        content: assistantResult.text,
+                        metadata: { 
+                            threadId: assistantResult.threadId,
+                            runId: assistantResult.runId,
+                            status: assistantResult.status 
+                        },
+                        created_at: new Date()
+                    };
+                    
+                    if (this.dbDisabled) {
+                        this.memoryStore.messages.push(assistantMessage);
+                    } else {
+                        await this.pgPool.query(
+                            'INSERT INTO messages (conversation_id, role, content, metadata) VALUES ($1, $2, $3, $4) RETURNING *',
+                            [id, 'assistant', assistantResult.text, JSON.stringify(assistantMessage.metadata)]
+                        );
+                    }
+                    
+                    return res.status(201).json({ 
+                        message: 'Message added successfully', 
+                        data: userMessage,
+                        assistantResponse: assistantMessage
+                    });
+                    
+                } catch (assistantError) {
+                    console.error('❌ Assistant run error:', assistantError);
+                    // Still return the user message even if Assistant fails
+                    return res.status(201).json({ 
+                        message: 'Message added successfully', 
+                        data: userMessage,
+                        assistantError: 'Assistant temporarily unavailable'
+                    });
+                }
+            }
+            
+            res.status(201).json({ message: 'Message added successfully', data: userMessage });
         } catch (error) {
             console.error('Add widget message error:', error);
             res.status(500).json({ error: 'Failed to add message' });
@@ -1045,16 +1100,16 @@ class MovingChatbotAPI {
 
     async sendLeadNotifications(lead) {
         try {
-            // Send email notification
-            // Implement your email service integration here
-
-            // Send Slack notification
-            // Implement your Slack integration here
-
-            // Send SMS notification
-            // Implement your SMS service integration here
+            const { postLeadToCRM, notifyLead } = require('./crm-webhook-handler');
+            
+            // Submit to CRM webhook
+            const crmResult = await postLeadToCRM(lead);
+            
+            // Send notification (optional)
+            await notifyLead(lead);
 
             console.log(`📧 Lead notification sent for: ${lead.first_name} ${lead.last_name}`);
+            console.log(`📤 CRM submission result:`, crmResult);
         } catch (error) {
             console.error('Send notifications error:', error);
         }
