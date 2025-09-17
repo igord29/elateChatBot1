@@ -9,7 +9,6 @@
     "dev": "nodemon backend-api.js",
     "websocket": "node websocket-server-fixed.js",
     "test": "jest",
-    "build": "webpack --mode production",
     "dev:frontend": "webpack serve --mode development",
     "lint": "eslint .",
     "format": "prettier --write .",
