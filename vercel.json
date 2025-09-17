@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/ping.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/assistant-chat.js", 
+      "use": "@vercel/node"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    }
+  ]
+}
