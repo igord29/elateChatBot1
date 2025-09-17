@@ -1,14 +1,100 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Elate Chatbot API</title>
+    <title>Elate Moving Chatbot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+        .chat-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px;
+            transition: transform 0.2s;
+        }
+        .chat-button:hover {
+            transform: translateY(-2px);
+        }
+        .api-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-align: left;
+        }
+        .api-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .api-info ul {
+            list-style: none;
+            padding: 0;
+        }
+        .api-info li {
+            margin: 8px 0;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .api-info a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .api-info a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
-    <h1>Elate Chatbot API</h1>
-    <p>API endpoints are available at:</p>
-    <ul>
-        <li><a href="/api/ping">/api/ping</a> - Health check</li>
-        <li><a href="/api/assistant-chat">/api/assistant-chat</a> - Chatbot API</li>
-    </ul>
+    <div class="container">
+        <h1>🚚 Elate Moving Chatbot</h1>
+        <p class="subtitle">Get instant quotes and book your move with our AI assistant</p>
+        
+        <a href="/chat-ui.html" class="chat-button">💬 Start Chatting</a>
+        <a href="/api/ping" class="chat-button">🔍 API Health Check</a>
+        
+        <div class="api-info">
+            <h3>API Endpoints</h3>
+            <ul>
+                <li><a href="/api/ping">/api/ping</a> - Health check endpoint</li>
+                <li><a href="/api/assistant-chat">/api/assistant-chat</a> - Chatbot API endpoint</li>
+                <li><a href="/chat-ui.html">/chat-ui.html</a> - Interactive chat interface</li>
+            </ul>
+        </div>
+    </div>
 </body>
 </html>
