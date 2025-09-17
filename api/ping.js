@@ -5,7 +5,3 @@ module.exports = async function handler(req, res) {
     ts: new Date().toISOString(),
   });
 };
-
-module.exports.config = {
-  runtime: 'nodejs20.x'
-};
