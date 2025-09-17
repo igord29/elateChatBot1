@@ -100,6 +100,7 @@
             justify-content: center;
             font-weight: bold;
             font-size: 14px;
+            overflow: hidden;
         }
 
         .message.user .message-avatar {
@@ -110,6 +111,12 @@
         .message.bot .message-avatar {
             background: #e1e5e9;
             color: #666;
+        }
+
+        .message.bot .message-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .chat-input-container {
@@ -205,6 +212,24 @@
             background: #ffebee;
             color: #c62828;
         }
+
+        .streaming-text {
+            position: relative;
+        }
+
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #667eea;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -216,9 +241,11 @@
         
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
-                <div class="message-avatar">🤖</div>
+                <div class="message-avatar">
+                    <img src="/src/frontend/assets/images/dave-avatar.jpg.jpg" alt="Dave" onerror="this.parentElement.textContent='🤖'">
+                </div>
                 <div class="message-content">
-                    Hello! I'm here to help you with your moving needs. How can I assist you today?
+                    Hello! I'm Dave, your Elate Moving assistant. I'm here to help you with your moving needs. How can I assist you today?
                 </div>
             </div>
         </div>
@@ -301,12 +328,15 @@
                     if (data.error) {
                         this.addMessage(`Error: ${data.error}`, 'bot', true);
                     } else {
-                        this.addMessage(data.text, 'bot');
+                        // Stream the bot response
+                        this.streamMessage(data.text, 'bot');
                         this.threadId = data.threadId;
                         
                         // Show success message if lead was submitted
                         if (data.text.includes('specialist will reach out') || data.text.includes('locked your details')) {
-                            this.showStatusMessage('✅ Lead submitted to CRM successfully!', 'success');
+                            setTimeout(() => {
+                                this.showStatusMessage('✅ Lead submitted to CRM successfully!', 'success');
+                            }, 1000);
                         }
                     }
                 } catch (error) {
@@ -316,24 +346,45 @@
                 }
             }
             
-            addMessage(text, sender, isError = false) {
+            addMessage(text, sender, isError = false, isStreaming = false) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${sender}`;
                 
                 const avatar = document.createElement('div');
                 avatar.className = 'message-avatar';
-                avatar.textContent = sender === 'user' ? '👤' : '🤖';
+                
+                if (sender === 'user') {
+                    avatar.textContent = '👤';
+                } else {
+                    // Use Dave's avatar for bot messages
+                    const avatarImg = document.createElement('img');
+                    avatarImg.src = '/src/frontend/assets/images/dave-avatar.jpg.jpg';
+                    avatarImg.alt = 'Dave';
+                    avatarImg.onerror = () => {
+                        // Fallback to emoji if image fails to load
+                        avatar.textContent = '🤖';
+                    };
+                    avatar.appendChild(avatarImg);
+                }
                 
                 const content = document.createElement('div');
                 content.className = 'message-content';
                 if (isError) content.classList.add('error-message');
-                content.textContent = text;
+                if (isStreaming) content.classList.add('streaming-text');
+                
+                if (isStreaming) {
+                    content.innerHTML = text + '<span class="streaming-cursor"></span>';
+                } else {
+                    content.textContent = text;
+                }
                 
                 messageDiv.appendChild(avatar);
                 messageDiv.appendChild(content);
                 
                 this.chatMessages.appendChild(messageDiv);
                 this.scrollToBottom();
+                
+                return { messageDiv, content };
             }
             
             showStatusMessage(text, type = 'info') {
@@ -358,6 +409,26 @@
                 if (loading) {
                     this.scrollToBottom();
                 }
+            }
+            
+            streamMessage(text, sender) {
+                const { messageDiv, content } = this.addMessage('', sender, false, true);
+                let currentText = '';
+                let index = 0;
+                
+                const streamInterval = setInterval(() => {
+                    if (index < text.length) {
+                        currentText += text[index];
+                        content.innerHTML = currentText + '<span class="streaming-cursor"></span>';
+                        this.scrollToBottom();
+                        index++;
+                    } else {
+                        // Remove cursor when streaming is complete
+                        content.innerHTML = currentText;
+                        content.classList.remove('streaming-text');
+                        clearInterval(streamInterval);
+                    }
+                }, 30); // Adjust speed here (lower = faster)
             }
             
             scrollToBottom() {

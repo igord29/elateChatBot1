@@ -212,6 +212,14 @@ export default async function handler(req, res) {
       console.log(`🧵 Created new thread: ${currentThreadId}`);
     }
 
+    // Add conversation guidance for new threads
+    if (!threadId) {
+      await openai.beta.threads.messages.create(currentThreadId, {
+        role: "user",
+        content: "IMPORTANT: Ask only 1-2 questions maximum per response. Keep conversations focused and easy to follow. Be conversational and friendly."
+      });
+    }
+
     // Add user message to thread
     await openai.beta.threads.messages.create(currentThreadId, {
       role: "user",
