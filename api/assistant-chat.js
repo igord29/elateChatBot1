@@ -5,6 +5,7 @@
 
 import OpenAI from 'openai';
 import crypto from 'crypto';
+import { sendWelcomeEmail } from '../services/email-service.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -165,6 +166,63 @@ async function handleSubmitLeadToolCall(call) {
 }
 
 /**
+ * Handle send_welcome_email tool call
+ */
+async function handleSendWelcomeEmailToolCall(call, threadId) {
+  try {
+    const args = JSON.parse(call.function.arguments || '{}');
+    
+    const { customer_email, customer_name } = args;
+    
+    if (!customer_email) {
+      console.warn('⚠️ No customer email provided for welcome email');
+      return { ok: false, error: 'Customer email is required' };
+    }
+
+    console.log(`📧 Sending welcome email to: ${customer_email}`);
+
+    // Get conversation messages for summary
+    let conversationMessages = [];
+    try {
+      const messages = await openai.beta.threads.messages.list(threadId, { 
+        order: "asc" 
+      });
+      conversationMessages = messages.data;
+    } catch (error) {
+      console.warn('⚠️ Could not retrieve conversation messages:', error.message);
+    }
+
+    // Send welcome email
+    const emailResult = await sendWelcomeEmail(
+      customer_email, 
+      customer_name, 
+      threadId, 
+      conversationMessages
+    );
+
+    if (emailResult.success) {
+      console.log(`✅ Welcome email sent successfully to: ${customer_email}`);
+      return { 
+        ok: true, 
+        messageId: emailResult.messageId,
+        customerEmail: customer_email 
+      };
+    } else {
+      console.error(`❌ Failed to send welcome email to: ${customer_email}`, emailResult.error);
+      return { 
+        ok: false, 
+        error: emailResult.error,
+        customerEmail: customer_email 
+      };
+    }
+
+  } catch (error) {
+    console.error('❌ Error in send_welcome_email tool call:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+/**
  * Main API handler
  */
 export default async function handler(req, res) {
@@ -243,6 +301,12 @@ export default async function handler(req, res) {
         for (const call of run.required_action.submit_tool_outputs.tool_calls) {
           if (call.function.name === "submit_lead") {
             const result = await handleSubmitLeadToolCall(call);
+            outputs.push({ 
+              tool_call_id: call.id, 
+              output: JSON.stringify(result) 
+            });
+          } else if (call.function.name === "send_welcome_email") {
+            const result = await handleSendWelcomeEmailToolCall(call, currentThreadId);
             outputs.push({ 
               tool_call_id: call.id, 
               output: JSON.stringify(result) 
