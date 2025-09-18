@@ -231,6 +231,47 @@
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0; }
         }
+
+        .hot-buttons {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e1e5e9;
+        }
+
+        .hot-buttons h4 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .hot-button {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border: 2px solid #e1e5e9;
+            border-radius: 20px;
+            color: #333;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .hot-button:hover {
+            background: #FF4c01;
+            color: white;
+            border-color: #FF4c01;
+            transform: translateY(-2px);
+        }
+
+        .hot-buttons.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -259,6 +300,14 @@
             </div>
         </div>
         
+        <div class="hot-buttons" id="hotButtons">
+            <h4>How can we help you move?</h4>
+            <button class="hot-button" data-message="I need residential moving services">🏠 Residential Moving</button>
+            <button class="hot-button" data-message="I need commercial moving services">🏢 Commercial Moving</button>
+            <button class="hot-button" data-message="I need fine art moving services">🎨 Fine Art Moving</button>
+            <button class="hot-button" data-message="I need a quote for moving services">💰 Get Free Quote</button>
+        </div>
+        
         <div class="chat-input-container">
             <form class="chat-input-form" id="chatForm">
                 <input 
@@ -285,6 +334,7 @@
                 this.sendButton = document.getElementById('sendButton');
                 this.typingIndicator = document.getElementById('typingIndicator');
                 this.chatForm = document.getElementById('chatForm');
+                this.hotButtons = document.getElementById('hotButtons');
                 
                 this.setupEventListeners();
             }
@@ -301,11 +351,24 @@
                         this.sendMessage();
                     }
                 });
+
+                // Hot button event listeners
+                document.querySelectorAll('.hot-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const message = button.getAttribute('data-message');
+                        this.messageInput.value = message;
+                        this.sendMessage();
+                    });
+                });
             }
             
             async sendMessage() {
                 const message = this.messageInput.value.trim();
                 if (!message) return;
+                
+                // Hide hot buttons after user starts conversation
+                this.hideHotButtons();
                 
                 // Add user message to chat
                 this.addMessage(message, 'user');
@@ -430,6 +493,12 @@
                         clearInterval(streamInterval);
                     }
                 }, 30); // Adjust speed here (lower = faster)
+            }
+            
+            hideHotButtons() {
+                if (this.hotButtons) {
+                    this.hotButtons.classList.add('hidden');
+                }
             }
             
             scrollToBottom() {
