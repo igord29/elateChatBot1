@@ -219,14 +219,72 @@ class ChatbotWebSocketServer {
         }
     }
 
+    /**
+     * Detects and extracts only the first question from content if multiple questions are present
+     * This ensures the chatbot asks one question at a time
+     */
+    extractFirstQuestion(content) {
+        if (!content || typeof content !== 'string') return content;
+        
+        // Common question patterns: ends with ?, contains question words, etc.
+        const questionMarkers = [
+            /\?/g,  // Question marks
+            /(?:what|when|where|who|why|how|which|do you|are you|can you|would you|could you)/gi  // Question words/phrases
+        ];
+        
+        // Split by common separators that might indicate multiple questions
+        const separators = [
+            /\?\s+(?=[A-Z])/,  // Question mark followed by capital letter
+            /\.\s+(?=[A-Z][^.!?]*\?)/,  // Period before a question
+            /\n\s*(?=[A-Z][^.!?]*\?)/,  // Newline before a question
+        ];
+        
+        let processedContent = content.trim();
+        
+        // Count question marks
+        const questionCount = (content.match(/\?/g) || []).length;
+        
+        if (questionCount > 1) {
+            // Multiple questions detected - extract first one
+            const firstQuestionEnd = content.indexOf('?');
+            if (firstQuestionEnd !== -1) {
+                // Find the end of the first complete sentence/question
+                let endIndex = firstQuestionEnd + 1;
+                
+                // Include any trailing text that's part of the first question
+                // (like "What's your name? I'd love to help you.")
+                const afterQuestion = content.substring(endIndex).trim();
+                if (afterQuestion && !afterQuestion.match(/^[A-Z][^.!?]*\?/)) {
+                    // If the text after doesn't start with a new question, include it
+                    const nextSentenceEnd = afterQuestion.search(/[.!?]\s+[A-Z]/);
+                    if (nextSentenceEnd !== -1) {
+                        endIndex += nextSentenceEnd + 1;
+                    } else if (!afterQuestion.match(/\?/)) {
+                        // No more questions, include remaining text
+                        endIndex = content.length;
+                    }
+                }
+                
+                processedContent = content.substring(0, endIndex).trim();
+                console.log('⚠️ Multiple questions detected. Using first question only:', processedContent.substring(0, 100));
+            }
+        }
+        
+        return processedContent;
+    }
+
     async streamBotMessage(ws, content) {
         try {
+            // Process content to ensure only one question is asked
+            const processedContent = this.extractFirstQuestion(content);
+            
             ws.send(JSON.stringify({ type: 'bot_stream_start', timestamp: new Date().toISOString() }));
-            const chunks = content.split(/(\s+)/); // stream by words incl. spaces
+            const chunks = processedContent.split(/(\s+)/); // stream by words incl. spaces
             for (const chunk of chunks) {
                 if (ws.readyState !== WebSocket.OPEN) break;
                 ws.send(JSON.stringify({ type: 'bot_stream_delta', delta: chunk }));
-                await new Promise(r => setTimeout(r, 30));
+                // Increased delay from 30ms to 80ms for slower, more readable streaming
+                await new Promise(r => setTimeout(r, 80));
             }
             ws.send(JSON.stringify({ type: 'bot_stream_end', timestamp: new Date().toISOString() }));
             // Typing indicator OFF

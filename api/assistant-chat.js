@@ -223,6 +223,46 @@ async function handleSendWelcomeEmailToolCall(call, threadId) {
 }
 
 /**
+ * Detects and extracts only the first question from content if multiple questions are present
+ * This ensures the chatbot asks one question at a time
+ */
+function extractFirstQuestion(content) {
+  if (!content || typeof content !== 'string') return content;
+  
+  // Count question marks
+  const questionCount = (content.match(/\?/g) || []).length;
+  
+  if (questionCount > 1) {
+    // Multiple questions detected - extract first one
+    const firstQuestionEnd = content.indexOf('?');
+    if (firstQuestionEnd !== -1) {
+      // Find the end of the first complete sentence/question
+      let endIndex = firstQuestionEnd + 1;
+      
+      // Include any trailing text that's part of the first question
+      // (like "What's your name? I'd love to help you.")
+      const afterQuestion = content.substring(endIndex).trim();
+      if (afterQuestion && !afterQuestion.match(/^[A-Z][^.!?]*\?/)) {
+        // If the text after doesn't start with a new question, include it
+        const nextSentenceEnd = afterQuestion.search(/[.!?]\s+[A-Z]/);
+        if (nextSentenceEnd !== -1) {
+          endIndex += nextSentenceEnd + 1;
+        } else if (!afterQuestion.match(/\?/)) {
+          // No more questions, include remaining text
+          endIndex = content.length;
+        }
+      }
+      
+      const processedContent = content.substring(0, endIndex).trim();
+      console.log('⚠️ Multiple questions detected. Using first question only:', processedContent.substring(0, 100));
+      return processedContent;
+    }
+  }
+  
+  return content.trim();
+}
+
+/**
  * Main API handler
  */
 export default async function handler(req, res) {
@@ -270,11 +310,11 @@ export default async function handler(req, res) {
       console.log(`🧵 Created new thread: ${currentThreadId}`);
     }
 
-    // Add conversation guidance for new threads
+    // Add conversation guidance for new threads - enforce ONE question at a time
     if (!threadId) {
       await openai.beta.threads.messages.create(currentThreadId, {
         role: "user",
-        content: "IMPORTANT: Ask only 1-2 questions maximum per response. Keep conversations focused and easy to follow. Be conversational and friendly."
+        content: "CRITICAL INSTRUCTION: You must ask ONLY ONE question per response. Never ask multiple questions in a single message. Wait for the user's answer before asking the next question. Keep conversations focused, conversational, and easy to follow. Be friendly and professional."
       });
     }
 
@@ -345,9 +385,12 @@ export default async function handler(req, res) {
       }
     }
 
+    // Process text to ensure only one question is asked
+    const processedText = extractFirstQuestion(text);
+
     return res.status(200).json({
       status: run.status,
-      text: text.trim(),
+      text: processedText,
       threadId: currentThreadId,
       runId: run.id
     });
