@@ -175,8 +175,19 @@ function formatDateISO(date) {
 }
 
 /**
+ * Calculates days between two dates
+ * @param {Date} date1 - First date
+ * @param {Date} date2 - Second date
+ * @returns {number} - Number of days between dates
+ */
+function daysBetween(date1, date2) {
+    const oneDay = 24 * 60 * 60 * 1000; // hours*minutes*seconds*milliseconds
+    return Math.round(Math.abs((date1 - date2) / oneDay));
+}
+
+/**
  * Validates that the move date is in the future
- * Handles various formats flexibly with smart year inference
+ * Handles various formats flexibly with smart messaging and time context
  * @param {string} dateString - Date string to validate
  * @returns {Object} - Validation result with valid flag, message, and parsed date info
  */
@@ -185,6 +196,7 @@ export function validateMoveDate(dateString) {
         const today = new Date();
         today.setHours(0, 0, 0, 0); // Reset to start of day for comparison
         const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1; // JavaScript months are 0-indexed
 
         // Try to parse the date string
         const parseResult = parseDateFuzzy(dateString);
@@ -206,23 +218,64 @@ export function validateMoveDate(dateString) {
             const testDateCurrentYear = new Date(currentYear, month, day);
             testDateCurrentYear.setHours(0, 0, 0, 0);
 
-            // If that date has already passed this year, assume next year
+            // Calculate next year's date
+            const nextYearDate = new Date(currentYear + 1, month, day);
+            nextYearDate.setHours(0, 0, 0, 0);
+            const daysUntilNextYear = daysBetween(nextYearDate, today);
+
+            // If that date has already passed this year
             if (testDateCurrentYear < today) {
-                // Date has passed - assume next year and ask for confirmation
-                const assumedDate = new Date(currentYear + 1, month, day);
-                assumedDate.setHours(0, 0, 0, 0);
-                
-                return {
-                    valid: false,
-                    needs_confirmation: true,
-                    assumed_year: currentYear + 1,
-                    month_day: formatMonthDay(assumedDate),
-                    full_assumed_date: formatDateLong(assumedDate),
-                    message: `${formatMonthDay(assumedDate)} has already passed this year. Are you thinking ${formatDateLong(assumedDate)}?`,
-                    date_passed_this_year: true
-                };
+                // Date has passed - check if next year is soon (within 90 days)
+                if (daysUntilNextYear <= 90) {
+                    // It's coming up soon - be conversational about it
+                    let timePhrase;
+                    if (daysUntilNextYear <= 30) {
+                        timePhrase = "coming up soon";
+                    } else if (daysUntilNextYear <= 60) {
+                        const monthsAway = Math.floor(daysUntilNextYear / 30);
+                        timePhrase = `about ${monthsAway} month${monthsAway > 1 ? 's' : ''} away`;
+                    } else {
+                        timePhrase = "in a couple months";
+                    }
+                    
+                    return {
+                        valid: true,
+                        needs_confirmation: true,
+                        assumed_year: currentYear + 1,
+                        month_day: formatMonthDay(nextYearDate),
+                        full_date: formatDateLong(nextYearDate),
+                        formatted_date: formatDateISO(nextYearDate),
+                        year: String(currentYear + 1),
+                        message: `Perfect! ${formatDateLong(nextYearDate)}—that's ${timePhrase}. Does that work?`,
+                        date_passed_this_year: true,
+                        is_soon: true
+                    };
+                } else {
+                    // Further out - standard confirmation
+                    return {
+                        valid: false,
+                        needs_confirmation: true,
+                        assumed_year: currentYear + 1,
+                        month_day: formatMonthDay(nextYearDate),
+                        full_assumed_date: formatDateLong(nextYearDate),
+                        formatted_date: formatDateISO(nextYearDate),
+                        message: `${formatMonthDay(nextYearDate)} has already passed this year. Are you thinking ${formatDateLong(nextYearDate)}?`,
+                        date_passed_this_year: true,
+                        is_soon: false
+                    };
+                }
             } else {
                 // Date is still upcoming this year - assume current year and just confirm
+                const daysUntil = daysBetween(testDateCurrentYear, today);
+                
+                // Add natural time context if it's very soon
+                let timeContext = "";
+                if (daysUntil <= 14) {
+                    timeContext = `—that's in about ${daysUntil} day${daysUntil > 1 ? 's' : ''}`;
+                } else if (daysUntil <= 30) {
+                    timeContext = "—coming up in a few weeks";
+                }
+                
                 return {
                     valid: true,
                     needs_confirmation: true,
@@ -231,7 +284,7 @@ export function validateMoveDate(dateString) {
                     full_date: formatDateLong(testDateCurrentYear),
                     formatted_date: formatDateISO(testDateCurrentYear),
                     year: String(currentYear),
-                    message: `Perfect! Just to confirm, that's ${formatDateLong(testDateCurrentYear)}?`,
+                    message: `Perfect! Just to confirm, that's ${formatDateLong(testDateCurrentYear)}${timeContext}?`,
                     date_passed_this_year: false
                 };
             }
