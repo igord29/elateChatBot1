@@ -457,11 +457,47 @@ export default async function handler(req, res) {
 6. Wait for the user's answer before asking the next question.
 7. Keep conversations focused, conversational, and easy to follow. Be friendly and professional.
 
-DATE VALIDATION INSTRUCTIONS:
-- After receiving the move date from the user, IMMEDIATELY call the validate_move_date function with the user's date string.
-- If valid=true: Confirm the full date with the user (e.g., "Just to confirm, that's October 12, 2024, correct?")
-- If valid=false: Share the validation message with the user and ask them to provide a future date.
-- Always confirm the complete date (month, day, year) before proceeding to the next question.`
+MOVE DATE VALIDATION PROTOCOL:
+
+When the user provides a move date:
+1. IMMEDIATELY call the validate_move_date function with the exact text the user provided
+
+2. Handle the response based on the function's return:
+
+   If valid=true AND needs_confirmation=true AND date_passed_this_year=false:
+   - Date is upcoming, year was inferred
+   - Simply confirm: "Perfect! Just to confirm, that's {full_date}?"
+   - Example: "Perfect! Just to confirm, that's December 15, 2025?"
+
+   If valid=false AND needs_confirmation=true AND date_passed_this_year=true:
+   - The month/day has already passed this year, next year assumed
+   - Confirm next year: Use the message from the function
+   - Example: "October 20th has already passed this year. Are you thinking October 20, 2026?"
+
+   If user confirms (yes/yeah/correct/yep):
+   - Move forward with the confirmed date
+   - Proceed to next question
+
+   If user says no or provides correction:
+   - Ask: "What date works for you?"
+   - Call validate_move_date with their new date
+
+   If valid=true AND needs_confirmation=false:
+   - User provided full date that's valid
+   - Confirm: "Perfect! Just to confirm, that's {full_date}?"
+
+   If valid=false AND needs_confirmation=false:
+   - Explicit date has passed
+   - Use the message from function
+   - Ask for a new future date
+
+3. Only proceed to next question after receiving user confirmation
+
+SMART YEAR INFERENCE:
+- If month/day is upcoming → Assume current year, just confirm the full date
+- If month/day has passed → Assume next year, confirm with user
+- Always get user confirmation before proceeding
+- Sound natural and confident, like you already know what they mean`
       });
     }
 

@@ -20,9 +20,9 @@ function parseDateFuzzy(dateString) {
     
     if (!cleanedString) return null;
 
-    // Check if year is present in original string
+    // Check if year is explicitly mentioned in the original string
     const yearMatch = cleanedString.match(/\b(19|20)\d{2}\b/);
-    const hasYear = !!yearMatch;
+    const hasExplicitYear = !!yearMatch;
 
     // Try multiple common date formats (in order of specificity)
     const formats = [
@@ -71,8 +71,7 @@ function parseDateFuzzy(dateString) {
                     'july', 'august', 'september', 'october', 'november', 'december'];
                 const monthIndex = monthNames.indexOf(match[1].toLowerCase());
                 if (monthIndex !== -1) {
-                    const currentYear = new Date().getFullYear();
-                    return new Date(currentYear, monthIndex, parseInt(match[2]));
+                    return { month: monthIndex, day: parseInt(match[2]), hasYear: false };
                 }
             }
             return null;
@@ -85,8 +84,7 @@ function parseDateFuzzy(dateString) {
                 const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
                 const monthIndex = monthAbbr.indexOf(match[1].toLowerCase());
                 if (monthIndex !== -1) {
-                    const currentYear = new Date().getFullYear();
-                    return new Date(currentYear, monthIndex, parseInt(match[2]));
+                    return { month: monthIndex, day: parseInt(match[2]), hasYear: false };
                 }
             }
             return null;
@@ -96,8 +94,7 @@ function parseDateFuzzy(dateString) {
             const numericNoYearPattern = /^(\d{1,2})[\/\-](\d{1,2})$/;
             const match = cleanedString.match(numericNoYearPattern);
             if (match) {
-                const currentYear = new Date().getFullYear();
-                return new Date(currentYear, parseInt(match[1]) - 1, parseInt(match[2]));
+                return { month: parseInt(match[1]) - 1, day: parseInt(match[2]), hasYear: false };
             }
             return null;
         },
@@ -124,8 +121,13 @@ function parseDateFuzzy(dateString) {
     for (const formatFn of formats) {
         try {
             const result = formatFn();
-            if (result && !isNaN(result.getTime())) {
-                return { date: result, hasYear };
+            if (result) {
+                if (result instanceof Date && !isNaN(result.getTime())) {
+                    return { date: result, hasExplicitYear };
+                } else if (result.month !== undefined && result.day !== undefined) {
+                    // Return month/day object for year inference
+                    return { monthDay: result, hasExplicitYear: false };
+                }
             }
         } catch (error) {
             // Continue to next format
@@ -149,6 +151,18 @@ function formatDateLong(date) {
 }
 
 /**
+ * Formats a date to "Month Day" format (no year)
+ * @param {Date} date - Date to format
+ * @returns {string} - Formatted date string
+ */
+function formatMonthDay(date) {
+    return date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric'
+    });
+}
+
+/**
  * Formats a date to YYYY-MM-DD format
  * @param {Date} date - Date to format
  * @returns {string} - Formatted date string
@@ -162,7 +176,7 @@ function formatDateISO(date) {
 
 /**
  * Validates that the move date is in the future
- * Handles various formats flexibly
+ * Handles various formats flexibly with smart year inference
  * @param {string} dateString - Date string to validate
  * @returns {Object} - Validation result with valid flag, message, and parsed date info
  */
@@ -170,74 +184,101 @@ export function validateMoveDate(dateString) {
     try {
         const today = new Date();
         today.setHours(0, 0, 0, 0); // Reset to start of day for comparison
+        const currentYear = today.getFullYear();
 
         // Try to parse the date string
         const parseResult = parseDateFuzzy(dateString);
 
-        if (!parseResult || !parseResult.date) {
+        if (!parseResult) {
             return {
                 valid: false,
-                message: "I want to make sure I get your move date right. Could you give me the month and day? For example, 'December 15' or '12/15'",
+                needs_confirmation: false,
+                message: "Just to make sure I have this right—what month and day were you thinking for your move?",
                 error: 'Date parsing failed'
             };
         }
 
+        // Handle month/day without year (needs year inference)
+        if (parseResult.monthDay) {
+            const { month, day } = parseResult.monthDay;
+            
+            // First try current year
+            const testDateCurrentYear = new Date(currentYear, month, day);
+            testDateCurrentYear.setHours(0, 0, 0, 0);
+
+            // If that date has already passed this year, assume next year
+            if (testDateCurrentYear < today) {
+                // Date has passed - assume next year and ask for confirmation
+                const assumedDate = new Date(currentYear + 1, month, day);
+                assumedDate.setHours(0, 0, 0, 0);
+                
+                return {
+                    valid: false,
+                    needs_confirmation: true,
+                    assumed_year: currentYear + 1,
+                    month_day: formatMonthDay(assumedDate),
+                    full_assumed_date: formatDateLong(assumedDate),
+                    message: `${formatMonthDay(assumedDate)} has already passed this year. Are you thinking ${formatDateLong(assumedDate)}?`,
+                    date_passed_this_year: true
+                };
+            } else {
+                // Date is still upcoming this year - assume current year and just confirm
+                return {
+                    valid: true,
+                    needs_confirmation: true,
+                    assumed_year: currentYear,
+                    month_day: formatMonthDay(testDateCurrentYear),
+                    full_date: formatDateLong(testDateCurrentYear),
+                    formatted_date: formatDateISO(testDateCurrentYear),
+                    year: String(currentYear),
+                    message: `Perfect! Just to confirm, that's ${formatDateLong(testDateCurrentYear)}?`,
+                    date_passed_this_year: false
+                };
+            }
+        }
+
+        // User provided explicit year - validate it
         let parsedDate = parseResult.date;
-        const hasYear = parseResult.hasYear;
+        if (!parsedDate) {
+            return {
+                valid: false,
+                needs_confirmation: false,
+                message: "Just to make sure I have this right—what month and day were you thinking for your move?",
+                error: 'Date parsing failed'
+            };
+        }
 
         // Reset time to start of day for comparison
         parsedDate.setHours(0, 0, 0, 0);
 
-        // If no year was in the original string, determine the correct year
-        if (!hasYear || parsedDate.getFullYear() === 1900) {
-            const currentYear = today.getFullYear();
-            
-            // Try current year first
-            const testDate = new Date(parsedDate);
-            testDate.setFullYear(currentYear);
-            
-            // If that date has passed, use next year
-            if (testDate < today) {
-                parsedDate.setFullYear(currentYear + 1);
-            } else {
-                parsedDate.setFullYear(currentYear);
-            }
-        }
-
-        // Check if date is in the future (allow same day moves - date >= today)
+        // Final check: is the date in the past?
         if (parsedDate < today) {
-            // Suggest next year's date
-            const suggestedDate = new Date(parsedDate);
-            suggestedDate.setFullYear(parsedDate.getFullYear() + 1);
-            
-            const formattedDate = formatDateLong(parsedDate);
-            const suggestedFormatted = formatDateLong(suggestedDate);
-            
             return {
                 valid: false,
-                message: `I see that ${formattedDate} has already passed. Did you mean ${suggestedFormatted}?`,
-                suggested_date: formatDateLong(suggestedDate)
+                needs_confirmation: false,
+                message: `I see that ${formatDateLong(parsedDate)} has already passed—we're at ${formatDateLong(today)} now. What date in the future works for you?`,
+                parsed_date: formatDateLong(parsedDate),
+                today: formatDateLong(today)
             };
         }
 
-        // Format the validated date
-        const formattedDate = formatDateLong(parsedDate);
-        const isoDate = formatDateISO(parsedDate);
-
+        // Valid future date with explicit year
         return {
             valid: true,
-            full_date: formattedDate,
-            formatted_date: isoDate,
-            message: `Great! Your move date is ${formattedDate}.`
+            needs_confirmation: false,
+            full_date: formatDateLong(parsedDate),
+            formatted_date: formatDateISO(parsedDate),
+            month_day: formatMonthDay(parsedDate),
+            year: String(parsedDate.getFullYear())
         };
 
     } catch (error) {
         // Last resort - ask for clarification naturally
         return {
             valid: false,
-            message: "I want to make sure I get your move date right. Could you give me the month and day? For example, 'December 15' or '12/15'",
+            needs_confirmation: false,
+            message: "Just to make sure I have this right—what month and day were you thinking for your move?",
             error: error.message
         };
     }
 }
-
