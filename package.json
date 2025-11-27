@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node backend-api.js",
     "dev": "nodemon backend-api.js",
-    "websocket": "node websocket-server-fixed.js",
+    "websocket": "node websocket-server.js",
     "test": "jest",
     "dev:frontend": "webpack serve --mode development",
     "lint": "eslint .",

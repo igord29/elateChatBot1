@@ -61,20 +61,76 @@ class MovingChatbotAPI {
     }
 
     async initializeRedis() {
+        // Skip Redis if explicitly disabled or in development without Redis
+        if (process.env.REDIS_DISABLED === 'true') {
+            console.log('ℹ️ Redis disabled via REDIS_DISABLED env var');
+            this.redis = null;
+            return;
+        }
+
         try {
             this.redis = new Redis({
                 host: process.env.REDIS_HOST || 'localhost',
                 port: process.env.REDIS_PORT || 6379,
                 password: process.env.REDIS_PASSWORD,
                 retryDelayOnFailover: 100,
-                maxRetriesPerRequest: 3
+                maxRetriesPerRequest: 3,
+                enableOfflineQueue: false, // Don't queue commands when disconnected
+                lazyConnect: true, // Don't connect immediately
+                reconnectOnError: (err) => {
+                    // Only reconnect on specific errors, not connection refused
+                    const targetError = 'READONLY';
+                    return err.message.includes(targetError);
+                },
+                retryStrategy: (times) => {
+                    // Stop retrying after 3 attempts
+                    if (times > 3) {
+                        console.warn('⚠️ Redis connection failed after 3 attempts. Disabling Redis.');
+                        this.redis = null;
+                        return null; // Stop retrying
+                    }
+                    return Math.min(times * 200, 2000);
+                }
             });
 
+            // Add error handlers to suppress unhandled error events
+            this.redis.on('error', (err) => {
+                // Silently handle connection errors - Redis is optional
+                if (err.code === 'ECONNREFUSED' || err.message.includes('connect')) {
+                    // Connection refused - Redis not running, this is OK
+                    if (this.redis) {
+                        this.redis.disconnect();
+                        this.redis = null;
+                    }
+                    return; // Don't log connection refused errors
+                }
+                // Log other Redis errors
+                console.warn('⚠️ Redis error:', err.message);
+            });
+
+            // Try to connect with timeout
+            const connectPromise = this.redis.connect();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Redis connection timeout')), 2000)
+            );
+
+            await Promise.race([connectPromise, timeoutPromise]);
             await this.redis.ping();
             console.log('✅ Redis connected successfully');
         } catch (error) {
-            console.warn('⚠️ Redis unavailable. Continuing without Redis cache.');
+            // Redis is optional - silently disable it
+            if (this.redis) {
+                try {
+                    this.redis.disconnect();
+                } catch (e) {
+                    // Ignore disconnect errors
+                }
+            }
             this.redis = null;
+            // Only log if Redis was explicitly configured
+            if (process.env.REDIS_HOST || process.env.REDIS_PORT) {
+                console.warn('⚠️ Redis unavailable. Continuing without Redis cache.');
+            }
         }
     }
 
@@ -202,7 +258,31 @@ class MovingChatbotAPI {
     }
 
     setupMiddleware() {
-        this.app.use(helmet());
+        // Configure Helmet - disable CSP in development for easier debugging
+        // Check NODE_ENV explicitly - default to development if not set
+        const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV !== 'production';
+        
+        console.log(`🔧 Helmet CSP: ${isDevelopment ? 'DISABLED (development mode)' : 'ENABLED (production mode)'}`);
+        
+        this.app.use(helmet({
+            contentSecurityPolicy: isDevelopment ? false : {
+                directives: {
+                    defaultSrc: ["'self'"],
+                    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for React/webpack dev
+                    styleSrc: ["'self'", "'unsafe-inline'"], // Needed for inline styles
+                    imgSrc: ["'self'", "data:", "https:"], // Allow images from anywhere
+                    fontSrc: ["'self'", "data:", "https:"], // Allow fonts
+                    connectSrc: ["'self'", "ws:", "wss:", "http://localhost:*", "https://api.openai.com"], // WebSocket and API connections
+                    workerSrc: ["'self'", "blob:"], // Web workers
+                    childSrc: ["'self'", "blob:"], // iframes
+                    objectSrc: ["'none'"], // Block objects
+                    baseUri: ["'self'"],
+                    formAction: ["'self'"],
+                    frameAncestors: ["'none'"],
+                },
+            },
+            crossOriginEmbedderPolicy: false, // Disable for development
+        }));
         this.app.use(cors({
             origin: process.env.NODE_ENV === 'production' 
                 ? ['https://yourwebsite.com', 'https://admin.yourwebsite.com']
@@ -221,6 +301,21 @@ class MovingChatbotAPI {
     }
 
     setupRoutes() {
+        // Root route - redirect to frontend or show API info
+        this.app.get('/', (req, res) => {
+            res.json({
+                message: 'Elate Moving Chatbot API',
+                version: '1.0.0',
+                frontend: 'http://localhost:8080',
+                endpoints: {
+                    health: '/health',
+                    api: '/api',
+                    websocket: 'ws://localhost:3001'
+                },
+                docs: 'Access the chatbot frontend at http://localhost:8080'
+            });
+        });
+
         this.app.get('/health', async (req, res) => {
             try {
                 let dbStatus = this.dbDisabled ? 'disabled' : 'connected';
@@ -1281,7 +1376,12 @@ class MovingChatbotAPI {
 }
 
 // Start server if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Check if this file is being run directly (not imported)
+const filePath = import.meta.url.replace('file:///', '').replace(/\\/g, '/');
+const scriptPath = process.argv[1]?.replace(/\\/g, '/');
+const isMainModule = filePath.endsWith(scriptPath) || scriptPath?.endsWith('backend-api.js');
+
+if (isMainModule) {
     const api = new MovingChatbotAPI();
     api.start();
 }

@@ -1,4 +1,6 @@
-const OpenAI = require('openai');
+import OpenAI from 'openai';
+import dotenv from 'dotenv';
+dotenv.config();
 
 class MovingConversationFlow {
     constructor() {
@@ -727,4 +729,4 @@ class MovingConversationFlow {
     }
 }
 
-module.exports = MovingConversationFlow; 
+export default MovingConversationFlow; 

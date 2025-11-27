@@ -1,18 +1,20 @@
-require('dotenv').config();
-const WebSocket = require('ws');
-const http = require('http');
-const express = require('express');
-const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
-const MovingConversationFlow = require('./moving-conversation-flows');
-const OpenAI = require('openai');
+import dotenv from 'dotenv';
+dotenv.config();
+import { WebSocketServer, WebSocket } from 'ws';
+import http from 'http';
+import express from 'express';
+import cors from 'cors';
+import { v4 as uuidv4 } from 'uuid';
+import MovingConversationFlow from './moving-conversation-flows.js';
+import OpenAI from 'openai';
+import { validateMoveDate } from './utils/date-validation.js';
 
 class ChatbotWebSocketServer {
     constructor(port = 3001) {
         this.port = port;
         this.app = express();
         this.server = http.createServer(this.app);
-        this.wss = new WebSocket.Server({ server: this.server });
+        this.wss = new WebSocketServer({ server: this.server });
         
         this.activeConnections = new Map();
         this.adminConnections = new Set();
@@ -191,13 +193,27 @@ class ChatbotWebSocketServer {
             const assistantsEnabled = apiKeyAvailable && String(process.env.OPENAI_ASSISTANTS_ENABLED || '').toLowerCase() === 'true';
             const assistantId = process.env.OPENAI_ASSISTANT_ID;
 
-            if (assistantsEnabled && assistantId) {
-                // Use OpenAI Assistants (Responses API)
-                const response = await this.openai.responses.create({
-                    assistant_id: assistantId,
-                    input: message.content
-                });
-                content = response.output_text || 'Thanks!';
+            if (assistantsEnabled && assistantId && this.openai) {
+                // Use proper OpenAI Assistants API with threads and runs (faster than Responses API)
+                try {
+                    const result = await this.runAssistantWithTimeout(
+                        message.content,
+                        assistantId,
+                        connection.threadId || null
+                    );
+                    
+                    console.log(`✅ Assistant response received: ${result.text ? result.text.substring(0, 100) : 'NO TEXT'}`);
+                    
+                    // Store threadId for future messages
+                    if (!connection.threadId && result.threadId) {
+                        connection.threadId = result.threadId;
+                    }
+                    
+                    content = result.text || result || 'Thanks for your message!';
+                } catch (assistantError) {
+                    console.error('❌ Assistant run error:', assistantError);
+                    content = "I'm sorry, I encountered an error processing your message. Please try again.";
+                }
             } else {
                 // Default to internal conversation flow
                 const flowResponse = await this.flow.handleConversation(
@@ -208,6 +224,13 @@ class ChatbotWebSocketServer {
                 content = flowResponse?.content || 'Thanks!';
             }
 
+            // Ensure content is a string
+            if (typeof content !== 'string') {
+                console.error('❌ Content is not a string:', typeof content, content);
+                content = String(content || 'Thanks for your message!');
+            }
+            
+            console.log(`📤 Streaming message to client (${content.length} chars): ${content.substring(0, 100)}...`);
             await this.streamBotMessage(connection.ws, content);
         } catch (error) {
             console.error('❌ Bot response error:', error);
@@ -216,6 +239,214 @@ class ChatbotWebSocketServer {
                 content: 'I ran into an issue responding. Please try again.',
                 timestamp: new Date().toISOString()
             }));
+            // Turn off typing indicator
+            connection.ws.send(JSON.stringify({ type: 'typing_indicator', isTyping: false }));
+        }
+    }
+
+    /**
+     * Run OpenAI Assistant with proper timeout protection
+     * Uses threads and runs API (faster than deprecated Responses API)
+     */
+    async runAssistantWithTimeout(userText, assistantId, threadId = null) {
+        const MAX_WAIT_TIME = 30000; // 30 second timeout (reduced from 60s for faster feedback)
+        const POLL_INTERVAL = 500; // Poll every 500ms (faster polling)
+        const MAX_POLL_ATTEMPTS = 60; // Max attempts
+        const startTime = Date.now();
+        let pollAttempts = 0;
+
+        try {
+            // Create or get thread
+            let currentThreadId = threadId;
+            if (!currentThreadId) {
+                const thread = await this.openai.beta.threads.create();
+                currentThreadId = thread.id;
+                console.log(`🧵 Created new thread: ${currentThreadId}`);
+                
+                // Add conversation guidance for new threads - STRONG enforcement
+                await this.openai.beta.threads.messages.create(currentThreadId, {
+                    role: "user",
+                    content: `CRITICAL INSTRUCTION - YOU MUST FOLLOW THIS EXACTLY:
+
+1. Ask ONLY ONE question per response. NEVER combine multiple questions.
+2. Examples of what NOT to do:
+   - "What's your name and phone?" ❌
+   - "What's your name, phone, and email?" ❌
+   - "What's your name? What's your phone?" ❌
+3. Examples of what TO do:
+   - "What's your full name?" ✅
+   - "What's the best phone number to reach you?" ✅
+4. When collecting contact info, ask for name FIRST, then wait for the answer before asking for phone.
+5. Never use "and" to combine questions about different pieces of information.
+6. Wait for the user's answer before asking the next question.
+7. Keep conversations focused, conversational, and easy to follow. Be friendly and professional.
+
+DATE VALIDATION INSTRUCTIONS:
+- After receiving the move date from the user, IMMEDIATELY call the validate_move_date function with the user's date string.
+- If valid=true: Confirm the full date with the user (e.g., "Just to confirm, that's October 12, 2024, correct?")
+- If valid=false: Share the validation message with the user and ask them to provide a future date.
+- Always confirm the complete date (month, day, year) before proceeding to the next question.`
+                });
+            }
+
+            // Add user message to thread
+            await this.openai.beta.threads.messages.create(currentThreadId, {
+                role: "user",
+                content: userText
+            });
+
+            // Create run
+            let run = await this.openai.beta.threads.runs.create(currentThreadId, {
+                assistant_id: assistantId
+            });
+
+            console.log(`🏃 Created run: ${run.id} for thread: ${currentThreadId}`);
+
+            // Poll run status with timeout protection
+            while (pollAttempts < MAX_POLL_ATTEMPTS) {
+                // Check timeout
+                if (Date.now() - startTime > MAX_WAIT_TIME) {
+                    throw new Error('Assistant response timeout after 30 seconds');
+                }
+
+                run = await this.openai.beta.threads.runs.retrieve(currentThreadId, run.id);
+                console.log(`🔄 Run status: ${run.status} (${pollAttempts + 1}/${MAX_POLL_ATTEMPTS})`);
+
+                // Handle error statuses
+                if (run.status === "failed" || run.status === "expired" || run.status === "cancelled") {
+                    const errorMsg = run.last_error?.message || `Run ${run.status}`;
+                    console.error(`❌ Run failed: ${errorMsg}`);
+                    throw new Error(errorMsg);
+                }
+
+                // Handle tool calls
+                if (run.status === "requires_action") {
+                    const outputs = [];
+                    for (const call of run.required_action.submit_tool_outputs.tool_calls) {
+                        if (call.function.name === "validate_move_date") {
+                            try {
+                                const args = JSON.parse(call.function.arguments || '{}');
+                                const { date_string } = args;
+                                
+                                console.log(`📅 Validating move date: ${date_string}`);
+                                const validationResult = validateMoveDate(date_string);
+                                
+                                if (validationResult.valid) {
+                                    console.log(`✅ Date validated successfully: ${validationResult.full_date}`);
+                                } else {
+                                    console.log(`❌ Date validation failed: ${validationResult.message}`);
+                                }
+                                
+                                outputs.push({
+                                    tool_call_id: call.id,
+                                    output: JSON.stringify(validationResult)
+                                });
+                            } catch (error) {
+                                console.error('❌ Error in validate_move_date tool call:', error);
+                                outputs.push({
+                                    tool_call_id: call.id,
+                                    output: JSON.stringify({
+                                        valid: false,
+                                        message: `Error validating date: ${error.message}`,
+                                        error: error.message
+                                    })
+                                });
+                            }
+                        } else {
+                            // For other tool calls, return ok (simplified handling)
+                            outputs.push({
+                                tool_call_id: call.id,
+                                output: JSON.stringify({ ok: true })
+                            });
+                        }
+                    }
+                    await this.openai.beta.threads.runs.submitToolOutputs(currentThreadId, run.id, { 
+                        tool_outputs: outputs 
+                    });
+                    pollAttempts = 0; // Reset counter
+                    continue;
+                }
+
+                // Check if completed
+                if (run.status === "completed") {
+                    break;
+                }
+
+                // Continue polling
+                if (run.status === "queued" || run.status === "in_progress") {
+                    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+                    pollAttempts++;
+                    continue;
+                }
+
+                // Unknown status - break
+                console.warn(`⚠️ Unknown run status: ${run.status}`);
+                break;
+            }
+
+            if (pollAttempts >= MAX_POLL_ATTEMPTS) {
+                throw new Error('Max poll attempts reached');
+            }
+
+            // Get the latest assistant message
+            const messages = await this.openai.beta.threads.messages.list(currentThreadId, {
+                order: "desc",
+                limit: 5  // Get more messages to find the assistant's response
+            });
+
+            // Find the most recent assistant message
+            let last = null;
+            for (const msg of messages.data) {
+                if (msg.role === 'assistant' && msg.run_id === run.id) {
+                    last = msg;
+                    break;
+                }
+            }
+            
+            // Fallback to first message if no match
+            if (!last && messages.data.length > 0) {
+                last = messages.data.find(msg => msg.role === 'assistant') || messages.data[0];
+            }
+
+            let text = "";
+            
+            if (last) {
+                console.log(`📨 Processing message: role=${last.role}, content type=${Array.isArray(last.content) ? 'array' : typeof last.content}`);
+                
+                if (Array.isArray(last.content)) {
+                    for (const p of last.content) {
+                        if (p.type === "text" && p.text) {
+                            text += p.text.value || p.text || '';
+                        } else if (p.type === "text" && typeof p === 'string') {
+                            text += p;
+                        }
+                    }
+                } else if (last.content && typeof last.content === 'string') {
+                    text = last.content;
+                } else if (last.content && last.content.text) {
+                    text = last.content.text.value || last.content.text || '';
+                }
+            }
+
+            // Log for debugging
+            console.log(`📝 Extracted text length: ${text.length}, content preview: ${text.substring(0, 150)}`);
+
+            if (!text || text.trim().length === 0) {
+                console.warn('⚠️ No text content found in assistant message. Full message:', JSON.stringify(last, null, 2));
+                text = "I'm sorry, I didn't receive a proper response. Could you please try again?";
+            }
+
+            // Process to ensure only one question
+            const processedText = this.extractFirstQuestion(text.trim());
+
+            return {
+                text: processedText,
+                threadId: currentThreadId
+            };
+
+        } catch (error) {
+            console.error('❌ Error in assistant run:', error);
+            throw error;
         }
     }
 
@@ -226,47 +457,122 @@ class ChatbotWebSocketServer {
     extractFirstQuestion(content) {
         if (!content || typeof content !== 'string') return content;
         
-        // Common question patterns: ends with ?, contains question words, etc.
-        const questionMarkers = [
-            /\?/g,  // Question marks
-            /(?:what|when|where|who|why|how|which|do you|are you|can you|would you|could you)/gi  // Question words/phrases
-        ];
-        
-        // Split by common separators that might indicate multiple questions
-        const separators = [
-            /\?\s+(?=[A-Z])/,  // Question mark followed by capital letter
-            /\.\s+(?=[A-Z][^.!?]*\?)/,  // Period before a question
-            /\n\s*(?=[A-Z][^.!?]*\?)/,  // Newline before a question
-        ];
-        
         let processedContent = content.trim();
+        
+        // Pattern to detect multiple questions in the same sentence
+        // Examples: "what's your name and phone?" or "what's your name? what's your phone?"
+        const multipleQuestionPatterns = [
+            /\b(?:and|or|,)\s+(?:what|when|where|who|why|how|which|do|are|can|would|could|is|will)\b/gi,  // "and what..." or ", what..."
+            /\?\s+(?:what|when|where|who|why|how|which|do|are|can|would|could|is|will)\b/gi,  // "? what..."
+            /\b(?:name|phone|email|address|date|number)\s+(?:and|or|,)\s+(?:name|phone|email|address|date|number|best|your)\b/gi,  // "name and phone", "name and best phone"
+            /\b(?:full\s+)?name\s+and\s+(?:best\s+)?(?:phone|email|address)\b/gi,  // "name and phone", "full name and best phone"
+            /\b(?:what'?s|what\s+is)\s+your\s+.*?\s+and\s+.*?\?/gi,  // "what's your X and Y?"
+        ];
+        
+        // Check for multiple questions in one sentence
+        let hasMultipleQuestions = multipleQuestionPatterns.some(pattern => pattern.test(content));
+        
+        // Also check for common patterns like "name and phone" or "name, phone, email"
+        const dataCollectionPattern = /\b(?:name|phone|email|address|date|number)\s+(?:and|,)\s+(?:name|phone|email|address|date|number|best|your)\b/gi;
+        if (dataCollectionPattern.test(content)) {
+            hasMultipleQuestions = true;
+        }
         
         // Count question marks
         const questionCount = (content.match(/\?/g) || []).length;
         
-        if (questionCount > 1) {
+        if (questionCount > 1 || hasMultipleQuestions) {
             // Multiple questions detected - extract first one
-            const firstQuestionEnd = content.indexOf('?');
-            if (firstQuestionEnd !== -1) {
-                // Find the end of the first complete sentence/question
-                let endIndex = firstQuestionEnd + 1;
+            if (questionCount > 1) {
+                // Split by question marks
+                const firstQuestionEnd = content.indexOf('?');
+                if (firstQuestionEnd !== -1) {
+                    processedContent = content.substring(0, firstQuestionEnd + 1).trim();
+                    console.log('⚠️ Multiple questions detected (by ?). Using first question only:', processedContent.substring(0, 100));
+                }
+            } else if (hasMultipleQuestions) {
+                // Try multiple split strategies
+                let splitIndex = -1;
                 
-                // Include any trailing text that's part of the first question
-                // (like "What's your name? I'd love to help you.")
-                const afterQuestion = content.substring(endIndex).trim();
-                if (afterQuestion && !afterQuestion.match(/^[A-Z][^.!?]*\?/)) {
-                    // If the text after doesn't start with a new question, include it
-                    const nextSentenceEnd = afterQuestion.search(/[.!?]\s+[A-Z]/);
-                    if (nextSentenceEnd !== -1) {
-                        endIndex += nextSentenceEnd + 1;
-                    } else if (!afterQuestion.match(/\?/)) {
-                        // No more questions, include remaining text
-                        endIndex = content.length;
-                    }
+                // Strategy 1: Split on "and" before data collection terms (name, phone, email, etc.)
+                const dataSplitPattern = /\s+and\s+(?:best\s+)?(?:phone|email|address|date|number)\b/i;
+                splitIndex = content.search(dataSplitPattern);
+                
+                // Strategy 2: Split on "and" before question words
+                if (splitIndex === -1) {
+                    const questionSplitPattern = /\s+(?:and|or|,)\s+(?:what|when|where|who|why|how|which|do|are|can|would|could|is|will)/i;
+                    splitIndex = content.search(questionSplitPattern);
                 }
                 
-                processedContent = content.substring(0, endIndex).trim();
-                console.log('⚠️ Multiple questions detected. Using first question only:', processedContent.substring(0, 100));
+                // Strategy 3: Split on comma before data collection terms
+                if (splitIndex === -1) {
+                    const commaSplitPattern = /,\s+(?:best\s+)?(?:phone|email|address|date|number|name)\b/i;
+                    splitIndex = content.search(commaSplitPattern);
+                }
+                
+                if (splitIndex !== -1) {
+                    // Find the end of the first part (before the "and/or" connector)
+                    let endIndex = splitIndex;
+                    
+                    // Try to find a natural break point (comma, period, or end of sentence)
+                    const beforeSplit = content.substring(0, splitIndex);
+                    const lastComma = beforeSplit.lastIndexOf(',');
+                    const lastPeriod = beforeSplit.lastIndexOf('.');
+                    const lastQuestion = beforeSplit.lastIndexOf('?');
+                    
+                    // Use the last punctuation mark before the split, or just split at "and/or"
+                    if (lastComma > lastPeriod && lastComma > lastQuestion) {
+                        endIndex = lastComma + 1;
+                    } else if (lastPeriod > lastQuestion) {
+                        endIndex = lastPeriod + 1;
+                    } else if (lastQuestion !== -1) {
+                        endIndex = lastQuestion + 1;
+                    }
+                    
+                    processedContent = content.substring(0, endIndex).trim();
+                    
+                    // If we didn't end with punctuation, add a question mark if it makes sense
+                    if (!processedContent.match(/[.!?]$/)) {
+                        // Check if the original had a question mark at the end
+                        if (content.trim().endsWith('?')) {
+                            processedContent += '?';
+                        }
+                    }
+                    
+                    console.log('⚠️ Multiple questions detected (by pattern). Using first question only:', processedContent.substring(0, 100));
+                } else {
+                    // Fallback: if we detect multiple questions but can't split, just take first part before "and"
+                    // This handles cases like "what's your name and phone?"
+                    const andPatterns = [
+                        /\s+and\s+(?:the\s+)?(?:best\s+)?(?:phone|email|address|date|number)\b/i,
+                        /\s+and\s+(?:your\s+)?(?:phone|email|address|date|number)\b/i,
+                    ];
+                    
+                    let andIndex = -1;
+                    for (const pattern of andPatterns) {
+                        const match = content.match(pattern);
+                        if (match) {
+                            andIndex = content.indexOf(match[0]);
+                            break;
+                        }
+                    }
+                    
+                    // Also try simple " and " search
+                    if (andIndex === -1) {
+                        const simpleAndIndex = content.toLowerCase().indexOf(' and ');
+                        if (simpleAndIndex !== -1) {
+                            const afterAnd = content.substring(simpleAndIndex + 5).toLowerCase();
+                            if (/\b(?:phone|email|address|date|number|name|best|the)\b/.test(afterAnd)) {
+                                andIndex = simpleAndIndex;
+                            }
+                        }
+                    }
+                    
+                    if (andIndex !== -1 && content.trim().endsWith('?')) {
+                        processedContent = content.substring(0, andIndex).trim() + '?';
+                        console.log('⚠️ Multiple questions detected (by "and"). Using first question only:', processedContent.substring(0, 100));
+                    }
+                }
             }
         }
         
@@ -475,10 +781,13 @@ setInterval(() => {
     }
 }, 60000); // Check every minute
 
-module.exports = ChatbotWebSocketServer;
+export default ChatbotWebSocketServer;
 
 // Start server if run directly
-if (require.main === module) {
+const isMainModule = import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}` || 
+                     process.argv[1]?.endsWith('websocket-server.js');
+
+if (isMainModule) {
     const server = new ChatbotWebSocketServer(process.env.WEBSOCKET_PORT || 3001);
     global.chatbotServer = server;
     server.start();
