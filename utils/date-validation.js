@@ -98,6 +98,33 @@ function parseDateFuzzy(dateString) {
             }
             return null;
         },
+        // Abbreviated month without space: "Dec16" or "Dec 16" (already handled above, but this catches no-space variant)
+        () => {
+            const abbrNoSpacePattern = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(\d{1,2})$/i;
+            const match = cleanedString.match(abbrNoSpacePattern);
+            if (match) {
+                const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                const monthIndex = monthAbbr.indexOf(match[1].toLowerCase());
+                if (monthIndex !== -1) {
+                    return { month: monthIndex, day: parseInt(match[2]), hasYear: false };
+                }
+            }
+            return null;
+        },
+        // Full month name without space: "December16"
+        () => {
+            const fullNoSpacePattern = /^(january|february|march|april|may|june|july|august|september|october|november|december)(\d{1,2})$/i;
+            const match = cleanedString.match(fullNoSpacePattern);
+            if (match) {
+                const monthNames = ['january', 'february', 'march', 'april', 'may', 'june',
+                    'july', 'august', 'september', 'october', 'november', 'december'];
+                const monthIndex = monthNames.indexOf(match[1].toLowerCase());
+                if (monthIndex !== -1) {
+                    return { month: monthIndex, day: parseInt(match[2]), hasYear: false };
+                }
+            }
+            return null;
+        },
         // ISO format: 2025-10-20
         () => {
             const isoPattern = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
@@ -125,7 +152,7 @@ function parseDateFuzzy(dateString) {
                 if (result instanceof Date && !isNaN(result.getTime())) {
                     return { date: result, hasExplicitYear };
                 } else if (result.month !== undefined && result.day !== undefined) {
-                    // Return month/day object for year inference
+                    // Return month/day object for year inference (no explicit year)
                     return { monthDay: result, hasExplicitYear: false };
                 }
             }
@@ -196,19 +223,24 @@ export function validateMoveDate(dateString) {
         const today = new Date();
         today.setHours(0, 0, 0, 0); // Reset to start of day for comparison
         const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1; // JavaScript months are 0-indexed
+
+        console.log(`DEBUG: Input: ${dateString}, Today: ${today.toISOString().split('T')[0]}`);
 
         // Try to parse the date string
         const parseResult = parseDateFuzzy(dateString);
 
         if (!parseResult) {
+            console.log('DEBUG: Could not parse date');
             return {
                 valid: false,
                 needs_confirmation: false,
                 message: "Just to make sure I have this right—what month and day were you thinking for your move?",
-                error: 'Date parsing failed'
+                error: 'Could not parse date'
             };
         }
+
+        const hasExplicitYear = parseResult.hasExplicitYear !== undefined ? parseResult.hasExplicitYear : (parseResult.date && parseResult.date.getFullYear() !== 1900);
+        console.log(`DEBUG: Has explicit year: ${hasExplicitYear}`);
 
         // Handle month/day without year (needs year inference)
         if (parseResult.monthDay) {
@@ -223,52 +255,17 @@ export function validateMoveDate(dateString) {
             nextYearDate.setHours(0, 0, 0, 0);
             const daysUntilNextYear = daysBetween(nextYearDate, today);
 
-            // If that date has already passed this year
-            if (testDateCurrentYear < today) {
-                // Date has passed - check if next year is soon (within 90 days)
-                if (daysUntilNextYear <= 90) {
-                    // It's coming up soon - be conversational about it
-                    let timePhrase;
-                    if (daysUntilNextYear <= 30) {
-                        timePhrase = "coming up soon";
-                    } else if (daysUntilNextYear <= 60) {
-                        const monthsAway = Math.floor(daysUntilNextYear / 30);
-                        timePhrase = `about ${monthsAway} month${monthsAway > 1 ? 's' : ''} away`;
-                    } else {
-                        timePhrase = "in a couple months";
-                    }
-                    
-                    return {
-                        valid: true,
-                        needs_confirmation: true,
-                        assumed_year: currentYear + 1,
-                        month_day: formatMonthDay(nextYearDate),
-                        full_date: formatDateLong(nextYearDate),
-                        formatted_date: formatDateISO(nextYearDate),
-                        year: String(currentYear + 1),
-                        message: `Perfect! ${formatDateLong(nextYearDate)}—that's ${timePhrase}.`,
-                        date_passed_this_year: true,
-                        is_soon: true
-                    };
-                } else {
-                    // Further out - standard confirmation
-                    return {
-                        valid: false,
-                        needs_confirmation: true,
-                        assumed_year: currentYear + 1,
-                        month_day: formatMonthDay(nextYearDate),
-                        full_assumed_date: formatDateLong(nextYearDate),
-                        formatted_date: formatDateISO(nextYearDate),
-                        message: `${formatMonthDay(nextYearDate)} has already passed this year. Are you thinking ${formatDateLong(nextYearDate)}?`,
-                        date_passed_this_year: true,
-                        is_soon: false
-                    };
-                }
-            } else {
-                // Date is still upcoming this year - assume current year and just confirm
+            console.log(`DEBUG: Test date current year: ${testDateCurrentYear.toISOString().split('T')[0]}, Today: ${today.toISOString().split('T')[0]}`);
+            console.log(`DEBUG: Is future? ${testDateCurrentYear > today}`);
+
+            // If the date in current year is in the future (not today or past), use current year
+            if (testDateCurrentYear > today) {
+                // Date is still upcoming this year
                 const daysUntil = daysBetween(testDateCurrentYear, today);
                 
-                // Add natural time context if it's very soon
+                console.log(`DEBUG: Using current year, days until: ${daysUntil}`);
+                
+                // Add natural time context
                 let timeContext = "";
                 if (daysUntil <= 14) {
                     timeContext = `—that's in about ${daysUntil} day${daysUntil > 1 ? 's' : ''}`;
@@ -287,6 +284,51 @@ export function validateMoveDate(dateString) {
                     message: `Perfect! Just to confirm, that's ${formatDateLong(testDateCurrentYear)}${timeContext}?`,
                     date_passed_this_year: false
                 };
+            } else {
+                // Date has passed this year or is today - assume next year
+                const daysUntilNextYear = daysBetween(nextYearDate, today);
+                
+                console.log(`DEBUG: Date passed, using next year, days until: ${daysUntilNextYear}`);
+                
+                // Check if next year is soon (within 90 days)
+                if (daysUntilNextYear <= 90) {
+                    // It's coming up soon
+                    let timePhrase;
+                    if (daysUntilNextYear <= 30) {
+                        timePhrase = "coming up soon";
+                    } else if (daysUntilNextYear <= 60) {
+                        const monthsAway = Math.floor(daysUntilNextYear / 30);
+                        timePhrase = `about ${monthsAway} month${monthsAway > 1 ? 's' : ''} away`;
+                    } else {
+                        timePhrase = "in a couple months";
+                    }
+                    
+                    return {
+                        valid: true,
+                        needs_confirmation: true,
+                        assumed_year: currentYear + 1,
+                        month_day: formatMonthDay(nextYearDate),
+                        full_date: formatDateLong(nextYearDate),
+                        formatted_date: formatDateISO(nextYearDate),
+                        year: String(currentYear + 1),
+                        message: `Perfect! ${formatDateLong(nextYearDate)}—that's ${timePhrase}, right?`,
+                        date_passed_this_year: true,
+                        is_soon: true
+                    };
+                } else {
+                    // Further out
+                    return {
+                        valid: false,
+                        needs_confirmation: true,
+                        assumed_year: currentYear + 1,
+                        month_day: formatMonthDay(nextYearDate),
+                        full_assumed_date: formatDateLong(nextYearDate),
+                        formatted_date: formatDateISO(nextYearDate),
+                        message: `${formatMonthDay(nextYearDate)} has already passed this year. Are you thinking ${formatDateLong(nextYearDate)}?`,
+                        date_passed_this_year: true,
+                        is_soon: false
+                    };
+                }
             }
         }
 
@@ -304,8 +346,8 @@ export function validateMoveDate(dateString) {
         // Reset time to start of day for comparison
         parsedDate.setHours(0, 0, 0, 0);
 
-        // Final check: is the date in the past?
-        if (parsedDate < today) {
+        // Final check: is the date in the past or today? (use <= instead of <)
+        if (parsedDate <= today) {
             return {
                 valid: false,
                 needs_confirmation: false,
@@ -326,6 +368,7 @@ export function validateMoveDate(dateString) {
         };
 
     } catch (error) {
+        console.log(`DEBUG: Exception: ${error.message}`);
         // Last resort - ask for clarification naturally
         return {
             valid: false,
