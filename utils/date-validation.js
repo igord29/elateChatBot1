@@ -246,7 +246,7 @@ export function validateMoveDate(dateString) {
                         full_date: formatDateLong(nextYearDate),
                         formatted_date: formatDateISO(nextYearDate),
                         year: String(currentYear + 1),
-                        message: `Perfect! ${formatDateLong(nextYearDate)}—that's ${timePhrase}. Does that work?`,
+                        message: `Perfect! ${formatDateLong(nextYearDate)}—that's ${timePhrase}.`,
                         date_passed_this_year: true,
                         is_soon: true
                     };
