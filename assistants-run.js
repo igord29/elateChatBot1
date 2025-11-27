@@ -121,7 +121,35 @@ class AssistantRunHandler {
     }
 
     /**
-     * Handle submit_lead tool call
+     * Validate addresses for apartment/unit numbers
+     * @param {string} address - Address string to validate
+     * @returns {boolean} - True if address mentions apartment keywords but lacks unit number
+     */
+    validateAddressHasUnitNumber(address) {
+        if (!address || typeof address !== 'string') {
+            return true; // No address or invalid - let other validation handle it
+        }
+
+        const addressLower = address.toLowerCase();
+        const apartmentKeywords = ['apartment', 'apt', 'unit', 'suite', 'condo', 'floor'];
+        
+        // Check if address contains apartment keywords
+        const hasApartmentKeyword = apartmentKeywords.some(keyword => addressLower.includes(keyword));
+        
+        if (!hasApartmentKeyword) {
+            return true; // No apartment keywords - validation passes
+        }
+
+        // Check if address has a unit number pattern
+        // Matches: apt 5, apartment 2B, unit #3, suite 4A, #5, etc.
+        const unitNumberPattern = /(apt|apartment|unit|suite|#)\s*[\w\d-]+/i;
+        const hasUnitNumber = unitNumberPattern.test(address);
+
+        return hasUnitNumber; // Returns false if apartment keyword exists but no unit number
+    }
+
+    /**
+     * Handle submit_lead tool call with address validation
      * @param {Object} call - Tool call object
      * @returns {Promise<Object>} - Tool call result
      */
@@ -140,6 +168,30 @@ class AssistantRunHandler {
             if (args.origin) lead.origin_address = args.origin;
             if (args.destination) lead.destination_address = args.destination;
             
+            // Validate addresses for apartment/unit numbers
+            const errors = [];
+            
+            // Validate origin address
+            if (lead.origin_address && !this.validateAddressHasUnitNumber(lead.origin_address)) {
+                errors.push("origin_address_missing_unit");
+            }
+            
+            // Validate destination address
+            if (lead.destination_address && !this.validateAddressHasUnitNumber(lead.destination_address)) {
+                errors.push("destination_address_missing_unit");
+            }
+            
+            // If validation errors, return them without submitting
+            if (errors.length > 0) {
+                console.warn(`⚠️ Address validation failed: ${errors.join(', ')}`);
+                return {
+                    success: false,
+                    ok: false,
+                    errors: errors,
+                    message: "Missing apartment/unit numbers in address(es)"
+                };
+            }
+            
             // POST to CRM (primary) and optional notification
             const crm = await postLeadToCRM(lead);
             try { 
@@ -155,11 +207,11 @@ class AssistantRunHandler {
             }
 
             console.log(`✅ Lead submitted via Assistant tool call: ${lead.full_name}`);
-            return { ok: crm.ok };
+            return { ok: crm.ok, success: true };
 
         } catch (error) {
             console.error('❌ Error in submit_lead tool call:', error);
-            return { ok: false, error: error.message };
+            return { ok: false, success: false, error: error.message };
         }
     }
 }
