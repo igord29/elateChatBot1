@@ -59,7 +59,7 @@ class ElateChatbotWidget extends WP_Widget {
         ?>
         <div id="elate-chatbot-container" style="width: 100%; max-width: 400px; margin: 0 auto;">
             <iframe 
-                src="https://elate-chat-bot1.vercel.app/wordpress-widget.html" 
+                src="https://elate-chat-bot1.vercel.app/chat-ui.html" 
                 width="100%" 
                 height="600" 
                 frameborder="0"
@@ -87,7 +87,7 @@ function elate_chatbot_shortcode($atts) {
     return sprintf(
         '<div id="elate-chatbot-shortcode" style="width: 100%%; max-width: %s; margin: 0 auto;">
             <iframe 
-                src="https://elate-chat-bot1.vercel.app/wordpress-widget.html" 
+                src="https://elate-chat-bot1.vercel.app/chat-ui.html" 
                 width="100%%" 
                 height="%s" 
                 frameborder="0"
@@ -134,7 +134,7 @@ function elate_chatbot_admin_page() {
             <p>You can also embed the chatbot directly using an iframe:</p>
             <textarea readonly style="width: 100%; height: 100px;">
 <iframe 
-    src="https://elate-chat-bot1.vercel.app/wordpress-widget.html" 
+    src="https://elate-chat-bot1.vercel.app/chat-ui.html" 
     width="400" 
     height="600" 
     frameborder="0"

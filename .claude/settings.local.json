@@ -3,7 +3,8 @@
     "allow": [
       "Bash(dir:*)",
       "Bash(xargs:*)",
-      "Bash(node -c:*)"
+      "Bash(node -c:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

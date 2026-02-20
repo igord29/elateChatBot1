@@ -272,6 +272,12 @@
         .hot-buttons.hidden {
             display: none;
         }
+
+        /* Hide text input during initial hot button selection to prevent
+           parent page elements from showing through the iframe */
+        .chat-input-container.initial-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -287,7 +293,7 @@
                     <img src="/src/frontend/assets/images/dave-avatar.jpg.jpg" alt="Dave" onerror="this.parentElement.textContent='🤖'">
                 </div>
                 <div class="message-content">
-                    Hello! I'm Dave, your Elate Moving specialist. I'm here to help you with your moving needs - whether it's residential, commercial, or fine art moving. How can I assist you today?
+                    Hey! I'm Dave with Elate Moving. Looking to get a quote or have questions about a move? I'm here to help — what's your name?
                 </div>
             </div>
         </div>
@@ -301,14 +307,14 @@
         </div>
         
         <div class="hot-buttons" id="hotButtons">
-            <h4>How can we help you move?</h4>
-            <button class="hot-button" data-message="I need residential moving services">🏠 Residential Moving</button>
-            <button class="hot-button" data-message="I need commercial moving services">🏢 Commercial Moving</button>
-            <button class="hot-button" data-message="I need fine art moving services">🎨 Fine Art Moving</button>
-            <button class="hot-button" data-message="I need a quote for moving services">💰 Get Free Quote</button>
+            <h4>What can we help with?</h4>
+            <button class="hot-button" data-message="I'm moving and need a quote">🏠 Residential Move</button>
+            <button class="hot-button" data-message="We're relocating our office">🏢 Commercial Move</button>
+            <button class="hot-button" data-message="I have fine art that needs to be moved">🎨 Fine Art Moving</button>
+            <button class="hot-button" data-message="I'd like to get a free quote">💰 Get a Free Quote</button>
         </div>
         
-        <div class="chat-input-container">
+        <div class="chat-input-container initial-hidden" id="chatInputContainer">
             <form class="chat-input-form" id="chatForm">
                 <input 
                     type="text" 
@@ -335,7 +341,8 @@
                 this.typingIndicator = document.getElementById('typingIndicator');
                 this.chatForm = document.getElementById('chatForm');
                 this.hotButtons = document.getElementById('hotButtons');
-                
+                this.chatInputContainer = document.getElementById('chatInputContainer');
+
                 this.setupEventListeners();
             }
             
@@ -397,7 +404,7 @@
                         this.threadId = data.threadId;
                         
                         // Show success message if lead was submitted
-                        if (data.text.includes('specialist will reach out') || data.text.includes('locked your details')) {
+                        if (data.text.includes('reach out') || data.text.includes('locked') || data.text.includes('locking') || data.text.includes('locked in') || data.text.includes('hit you up')) {
                             setTimeout(() => {
                                 this.showStatusMessage('✅ Lead submitted to CRM successfully!', 'success');
                             }, 1000);
@@ -498,6 +505,10 @@
             hideHotButtons() {
                 if (this.hotButtons) {
                     this.hotButtons.classList.add('hidden');
+                }
+                // Show the text input + Send button once hot buttons are dismissed
+                if (this.chatInputContainer) {
+                    this.chatInputContainer.classList.remove('initial-hidden');
                 }
             }
             
