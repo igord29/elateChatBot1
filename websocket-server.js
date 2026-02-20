@@ -263,65 +263,54 @@ class ChatbotWebSocketServer {
                 currentThreadId = thread.id;
                 console.log(`🧵 Created new thread: ${currentThreadId}`);
                 
-                // Add conversation guidance for new threads - STRONG enforcement
+                // Add conversation guidance for new threads — v3 aligned
                 await this.openai.beta.threads.messages.create(currentThreadId, {
                     role: "user",
-                    content: `CRITICAL INSTRUCTION - YOU MUST FOLLOW THIS EXACTLY:
+                    content: `CONVERSATION RULES — FOLLOW THESE EVERY TIME:
 
-1. Ask ONLY ONE question per response. NEVER combine multiple questions.
-2. Examples of what NOT to do:
-   - "What's your name and phone?" ❌
-   - "What's your name, phone, and email?" ❌
-   - "What's your name? What's your phone?" ❌
-3. Examples of what TO do:
-   - "What's your full name?" ✅
-   - "What's the best phone number to reach you?" ✅
-4. When collecting contact info, ask for name FIRST, then wait for the answer before asking for phone.
-5. Never use "and" to combine questions about different pieces of information.
-6. Wait for the user's answer before asking the next question.
-7. Keep conversations focused, conversational, and easy to follow. Be friendly and professional.
+1. ONE question per response. Never stack or combine questions.
+   - Bad: "What's your name and phone?" ❌
+   - Good: "What's your name?" ✅ (then wait, then ask phone next)
+2. Get contact info FIRST — name, then phone. This is priority so we capture the lead even if they drop off.
+3. Keep it natural and conversational — talk like a real person, not a script. Always be closing.
 
-MOVE DATE VALIDATION PROTOCOL:
+MOVE DATE HANDLING:
 
-When the user provides a move date:
-1. IMMEDIATELY call the validate_move_date function with the exact text the user provided
-
+When someone gives you a move date:
+1. IMMEDIATELY call validate_move_date with exactly what they said
 2. Handle the response based on the function's return:
 
    If valid=true AND needs_confirmation=true AND date_passed_this_year=false:
    - Date is upcoming, year was inferred
-   - Simply confirm: "Perfect! Just to confirm, that's {full_date}?"
-   - Example: "Perfect! Just to confirm, that's December 15, 2025?"
+   - Confirm casually: "Got it — so that's [full_date]?"
 
    If valid=false AND needs_confirmation=true AND date_passed_this_year=true:
-   - The month/day has already passed this year, next year assumed
-   - Confirm next year: Use the message from the function
-   - Example: "October 20th has already passed this year. Are you thinking October 20, 2026?"
-
-   If user confirms (yes/yeah/correct/yep):
-   - Move forward with the confirmed date
-   - Proceed to next question
-
-   If user says no or provides correction:
-   - Ask: "What date works for you?"
-   - Call validate_move_date with their new date
+   - Month/day already passed this year, next year assumed
+   - Confirm: "[month day] already passed this year — you thinking [next year]?"
 
    If valid=true AND needs_confirmation=false:
-   - User provided full date that's valid
-   - Confirm: "Perfect! Just to confirm, that's {full_date}?"
+   - Full valid date given
+   - Confirm: "Got it, [full_date]. We're good?"
 
    If valid=false AND needs_confirmation=false:
-   - Explicit date has passed
-   - Use the message from function
-   - Ask for a new future date
+   - Date has explicitly passed
+   - Use the message from the function, ask for a new future date
 
-3. Only proceed to next question after receiving user confirmation
+   If user confirms → move forward. If user says no → ask "No worries — what date works for you?"
 
-SMART YEAR INFERENCE:
-- If month/day is upcoming → Assume current year, just confirm the full date
-- If month/day has passed → Assume next year, confirm with user
-- Always get user confirmation before proceeding
-- Sound natural and confident, like you already know what they mean`
+3. Wait for them to confirm before moving on
+
+YEAR INFERENCE:
+- If the month/day hasn't happened yet → assume current year, confirm
+- If it already passed → assume next year, check with them
+- Sound natural about it, like you already know what they mean
+- NEVER say "parse", "format", "validated", "processed", or any technical terms
+- If function returns error → just ask naturally: "Just wanna make sure I got that right — what date works for you?"
+
+ADDRESS RULES:
+- If they mention apartment/condo but no unit number → you MUST ask for it
+- Check BOTH origin and destination for unit numbers
+- If it's a house → no unit needed, move on`
                 });
             }
 

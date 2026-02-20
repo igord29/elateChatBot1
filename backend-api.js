@@ -285,7 +285,7 @@ class MovingChatbotAPI {
         }));
         this.app.use(cors({
             origin: process.env.NODE_ENV === 'production' 
-                ? ['https://yourwebsite.com', 'https://admin.yourwebsite.com']
+                ? ['https://elatemoving.com', 'https://admin.elatemoving.com', 'https://www.elatemoving.com']
                 : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080'],
             credentials: true
         }));
